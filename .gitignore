@@ -6,6 +6,7 @@ backup-*/
 out-*/
 *.sentinel
 wmux-orch-*/
+.orch-run/
 
 # Logs & temp
 *.log
