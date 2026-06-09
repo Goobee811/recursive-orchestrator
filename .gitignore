@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Orchestration runtime artifacts
+backup-*/
+out-*/
+*.sentinel
+wmux-orch-*/
+
+# Logs & temp
+*.log
+tmp/
+.DS_Store
+Thumbs.db
