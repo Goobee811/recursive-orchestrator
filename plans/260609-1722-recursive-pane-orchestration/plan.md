@@ -77,7 +77,7 @@ An toàn: backup+denylist, data-fence, secret-scan, runtime write-fence bọc la
 | 2 | [Codex Engine + Wrapper Protocol](./phase-02-file-protocol-scaffolding.md) | P1 | P1 | ✅ Done — codex headless verified (direct + wmux pane), result đúng schema + JSONL forensics; plugin gốc nguyên |
 | 3 | [Context Meter (180k)](./phase-03-context-meter.md) | P2 | — | ✅ Done — meter 5 nhánh pass; child worker có session-id riêng, scan-UUID tìm đúng transcript con |
 | 4 | [Nested Recursion Engine](./phase-04-orchestration-engine.md) | P1 | P1 | ✅ Done — FALLBACK (Orchestrator trung gian): guard chốt cứng + register nested wave + request/response; 32 test PASS + e2e spawn thật; 4 hardening (C1/C2/H1/H2); GO-nested bỏ (YAGNI per spike) |
-| 5 | [Continuation Chain + Reverse-Relay](./phase-05-handoff-chain-lifecycle.md) | P1 | P2,P3 | 🚧 In-progress — 5A reconcile (**H3 giải**) ✅ + 5B chain/reverse-relay ✅ (104 test PASS, review pass); 5C leader-aggregate pending |
+| 5 | [Continuation Chain + Reverse-Relay](./phase-05-handoff-chain-lifecycle.md) | P1 | P2,P3 | ✅ Done — 5A reconcile (**H3 giải**) + 5B chain/reverse-relay + **5C leader-aggregate** (dogfood: worker Codex tự viết qua hệ, verify H7, 3 test PASS); driver loop `orchestrator-pass.ps1` + `harvest-results.js` vá gap lifecycle pane `-NoExit` (overlap Phase 7) |
 | 6 | [Safety Layers](./phase-06-safety-layers.md) | P1 | P2 | ✅ Done — 4 lớp (backup+git+denylist+write-fence, data-fence, secret-scan, crash-recovery heartbeat+marker) bọc launch path **opt-in** (default off → Phase 4/5 zero regression); 64 test PASS; review fix H1(fence wiring)/H2(false-crash)+M1-M4 |
 | 7 | [E2E Test + Default Mode Packaging](./phase-07-default-mode-packaging.md) | P2 | P4,P5,P6 | Pending |
 
