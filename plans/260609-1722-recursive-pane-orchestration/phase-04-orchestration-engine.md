@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Nested Recursion Engine"
-status: pending
+status: done
 priority: P1
 effort: "4-6h"
 dependencies: [1]
@@ -54,9 +54,27 @@ worker (depth d) gặp sub-task →
 
 ## Success Criteria
 
-- [ ] Worker tạo được sub-worker vào pane con (GO-nested) HOẶC qua Orchestrator trung gian (fallback) — đúng verdict Phase 1.
-- [ ] `nested-guard.js` chặn depth/concurrent vượt giới hạn, model không lách được (đọc state, không phải lời nhắc).
-- [ ] `state.json` phản ánh đúng cây nested; cleanup theo state dọn hết.
+- [x] Worker tạo được sub-worker qua **Orchestrator trung gian (fallback)** — đúng verdict Phase 1. E2e thực tế: orchestrator spawn `pane-d4bfa968` → `agent-fe3d00bb` (w1-c1, depth 2) chạy thật, sentinel auto-ran, cleanup 0 rác.
+- [x] `nested-guard.js` chặn depth/concurrent vượt giới hạn (chương trình quyết định ngoài prompt, fail-closed). 32 test PASS: depth 6 deny / 8+1 deny / boundary 5+8 allow / NaN-limit deny.
+- [x] `state.json` phản ánh đúng cây nested (`parentAgentId`+`depth`, nested wave); cleanup theo state dọn hết.
+
+## Kết quả implement (2026-06-09)
+
+**Verdict áp dụng: FALLBACK** (spike Phase 1). Files delta (`scripts/`):
+- `nested-state.js` — lib chung: load/save atomic (tmp+rename) + lock `state.lock` (openSync 'wx' + stale-reclaim); listAgents/findAgent/countActive/agentDepth/makeChildId/addNestedWave; `ENGINES`+`isValidAgentId`.
+- `nested-guard.js` — chốt cứng `evaluateGuard` (depth≤5, concurrent≤8), fail-closed (limit NaN/state mù → deny).
+- `nested-request.js` — worker ghi `nested-request-<id>.json` sau guard; sanitize tasks; validate parentId.
+- `process-nested-requests.js` — orchestrator nhặt request → re-check guard → register nested wave → prompt → spawn hộ qua wmux CLI (auto-anchor = orchestrator surface, KHÔNG `--anchor-surface`) → `nested-response-<id>.json`; `--dry-run`.
+- Test: `spike/test-nested-phase4.js` (32 PASS), `spike/dummy-launcher.js` (e2e 0 chi phí).
+
+**Bỏ GO-nested `spawn-subagents.ps1`** (YAGNI): spike đã verify `layout grid --anchor-surface` reshape phẳng + gom nhầm surface orchestrator → build = code chết, đi ngược verdict.
+
+**Hardening sau code-review** (4 fix): C1 fail-open khi limit NaN; C2 path-traversal qua parentId (whitelist `[A-Za-z0-9._-]`, chặn ở worker+processor); H1 engine không re-validate → chèn `--cmd`; H2 empty subTasks → wave rỗng.
+
+**Defer (không thuộc Phase 4):**
+- **H3 → Phase 5:** nested child spawn qua `wmux agent spawn` KHÔNG được hook `on-agent-stop` cập nhật → kẹt `running`. Monitor loop (poll `wmux agent list` → `exited` → reconcile + giải phóng slot) là cơ chế đóng cây + reverse-relay của Phase 5. Hướng hiện tại fail-safe (deny nhiều hơn).
+- **M1/M2 → Phase 6:** lock dùng token chống reclaim-race; gộp guard re-check vào trong `withState` (TOCTOU). Single-actor nên hiện tại an toàn.
+- **M3 → Phase 6:** data-fence sâu cho `subtask`/`label` (markdown-section injection vào prompt con).
 
 ## Risk Assessment
 
