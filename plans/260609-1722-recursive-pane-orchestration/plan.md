@@ -74,8 +74,8 @@ An toàn: backup+denylist, data-fence, secret-scan, runtime write-fence bọc la
 | Phase | Tên | Priority | Phụ thuộc | Status |
 |-------|------|----------|-----------|--------|
 | 1 | [Repo Bootstrap + Baseline + Nesting Spike](./phase-01-spike-verify-wmux.md) | P1 | — | ✅ Done — baseline PASS; nested=FALLBACK ([spike report](../reports/spike-260609-nested-spawn-capability-report.md)) |
-| 2 | [Codex Engine + Wrapper Protocol](./phase-02-file-protocol-scaffolding.md) | P1 | P1 | Pending |
-| 3 | [Context Meter (180k)](./phase-03-context-meter.md) | P2 | — | Pending |
+| 2 | [Codex Engine + Wrapper Protocol](./phase-02-file-protocol-scaffolding.md) | P1 | P1 | ✅ Done — codex headless verified (direct + wmux pane), result đúng schema + JSONL forensics; plugin gốc nguyên |
+| 3 | [Context Meter (180k)](./phase-03-context-meter.md) | P2 | — | ✅ Done — meter 5 nhánh pass; child worker có session-id riêng, scan-UUID tìm đúng transcript con |
 | 4 | [Nested Recursion Engine](./phase-04-orchestration-engine.md) | P1 | P1 | Pending |
 | 5 | [Continuation Chain + Reverse-Relay](./phase-05-handoff-chain-lifecycle.md) | P1 | P2,P3 | Pending |
 | 6 | [Safety Layers](./phase-06-safety-layers.md) | P1 | P2 | Pending |
