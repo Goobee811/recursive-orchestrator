@@ -26,7 +26,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadState, withState, findAgent, addNestedWave, countActive, ENGINES, isValidAgentId } = require('./nested-state');
-const { allocateGrid, spawnIntoPane, fwd } = require('./pane-spawn');
+const { allocateGrid, allocateSplit, spawnIntoPane, fwd } = require('./pane-spawn');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
 const { fence } = require('./data-fence');
 
@@ -196,6 +196,29 @@ function writeJsonAtomic(file, payload) {
   fs.renameSync(tmp, file);
 }
 
+function paneOf(stateFile, agentId) {
+  const found = findAgent(loadState(stateFile), agentId);
+  return found && found.agent ? found.agent.paneId : '';
+}
+
+function allocateContinuationPane(opts, fromPane) {
+  if (opts.layout === 'split') {
+    // harvest-results can kill the completed from-link pane before chain-router runs,
+    // so prefer the exact chain pane but fall back to the orchestrator/root pane.
+    for (const sourcePane of [fromPane, opts.rootPane].filter(Boolean)) {
+      try { return { paneId: allocateSplit(opts.wmuxCli, sourcePane, 'vertical'), split: 'vertical', sourcePane }; }
+      catch (e) { process.stderr.write(`chain-router: split from ${sourcePane} failed (${e.message})\n`); }
+    }
+  }
+  try {
+    const paneIds = allocateGrid(opts.wmuxCli, 1);
+    return { paneId: paneIds[0] };
+  } catch (e) {
+    process.stderr.write(`chain-router: layout grid failed (${e.message})\n`);
+    return {};
+  }
+}
+
 function routeOne(requestFile, opts) {
   const orchDir = path.dirname(opts.stateFile);
   const request = JSON.parse(fs.readFileSync(requestFile, 'utf8'));
@@ -223,6 +246,7 @@ function routeOne(requestFile, opts) {
 
   // spawn-next
   const spec = sanitizeNext(request.next, orchDir, null);
+  const fromPane = paneOf(opts.stateFile, plan.fromAgentId);
   setRequestStatus(requestFile, 'processing');
   const ctx = { cwd: request.cwd || opts.cwd, scriptsDir: __dirname, stateFile: opts.stateFile };
   const link = withState(opts.stateFile, (state) => applySpawnNext(state, plan, spec, orchDir));
@@ -232,13 +256,10 @@ function routeOne(requestFile, opts) {
 
   let spawnInfo = { id: link.id, engine: link.engine, resultFile: link.resultFile };
   if (!opts.dryRun) {
-    // A grid failure must not escape: the link is already registered 'pending', and an
-    // uncaught throw would skip the failed-marking below and wedge it forever (no live
-    // record → reconcile can't close it). [] → falls through to the no-pane branch.
-    let paneIds = [];
-    try { paneIds = allocateGrid(opts.wmuxCli, 1); }
-    catch (e) { process.stderr.write(`chain-router: layout grid failed (${e.message})\n`); }
-    const paneId = paneIds[0];
+    // Allocation failures must not escape: the link is already registered pending, and
+    // no live wmux record exists for reconcile to close if the router wedges here.
+    const allocation = allocateContinuationPane(opts, fromPane);
+    const paneId = allocation.paneId;
     if (!paneId) {
       withState(opts.stateFile, (state) => { const f = findAgent(state, link.id); if (f) { f.agent.status = 'failed'; f.agent.exitCode = -1; } });
       spawnInfo.error = 'no pane allocated';
@@ -253,7 +274,7 @@ function routeOne(requestFile, opts) {
           const f = findAgent(state, link.id);
           if (f) { f.agent.paneId = paneId; f.agent.surfaceId = surfaceId; f.agent.wmuxAgentId = agentId; f.agent.status = 'running'; f.agent.startedAt = now; }
         });
-        spawnInfo = { ...spawnInfo, paneId, agentId, surfaceId };
+        spawnInfo = { ...spawnInfo, paneId, agentId, surfaceId, split: allocation.split, sourcePane: allocation.sourcePane };
       } catch (e) {
         withState(opts.stateFile, (state) => { const f = findAgent(state, link.id); if (f) { f.agent.status = 'failed'; f.agent.exitCode = -1; } });
         spawnInfo.error = e.message;
@@ -284,6 +305,8 @@ function main() {
     launcher: getFlag('--launcher', path.join(__dirname, 'launch-agent-ext.js')),
     wmuxCli: getFlag('--wmux-cli', process.env.WMUX_CLI || ''),
     safeWrapper: getFlag('--safe-wrapper', process.env.WMUX_SAFE_WRAPPER || ''),
+    rootPane: getFlag('--root-pane', process.env.WMUX_PANE_ID || ''),
+    layout: (getFlag('--layout', 'split') || 'split').toLowerCase(),
     maxConcurrent: parseInt(getFlag('--max-concurrent', '8'), 10),
     cwd: getFlag('--cwd', process.cwd()),
     dryRun: hasFlag('--dry-run'),

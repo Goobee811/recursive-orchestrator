@@ -52,6 +52,16 @@ function allocateGrid(wmuxCli, workerCount) {
   return Array.isArray(parsed.newPaneIds) ? parsed.newPaneIds : [];
 }
 
+function allocateSplit(wmuxCli, sourcePane, direction) {
+  if (sourcePane) execFileSync('node', [wmuxCli, 'focus-pane', sourcePane], { encoding: 'utf8' });
+  const args = [wmuxCli, 'split'];
+  if (direction === 'horizontal') args.push('--down');
+  const out = execFileSync('node', args, { encoding: 'utf8' });
+  const parsed = JSON.parse(out);
+  if (!parsed.paneId) throw new Error(`split returned no paneId: ${out}`);
+  return parsed.paneId;
+}
+
 // Launch one agent into an existing pane. `engine` travels inside the --cmd string
 // because `wmux agent spawn` cannot pass env vars to the pane process (so the engine
 // can't ride WMUX_AGENT_CMD here). Returns wmux's { agentId, surfaceId } — agentId is
@@ -69,4 +79,4 @@ function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, c
   return { agentId: parsed.agentId, surfaceId: parsed.surfaceId };
 }
 
-module.exports = { allocateGrid, spawnIntoPane, buildLaunchCmd, fwd };
+module.exports = { allocateGrid, allocateSplit, spawnIntoPane, buildLaunchCmd, fwd };

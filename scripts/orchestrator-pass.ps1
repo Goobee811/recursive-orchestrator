@@ -35,6 +35,8 @@ param(
   [int]$MaxDepth = 5,
   [int]$MaxConcurrent = 8,
   [string]$Cwd = (Get-Location).Path,
+  [string]$RootPane = $env:WMUX_PANE_ID,
+  [string]$Layout = "split",
   [switch]$Chain,
   [switch]$Mark,
   [switch]$HarvestKill,
@@ -77,6 +79,8 @@ Invoke-Step "1b/5 harvest-results" $hv
 $pn = @("$scripts/process-nested-requests.js", "--state", $State, "--max-depth", "$MaxDepth", "--max-concurrent", "$MaxConcurrent", "--cwd", $Cwd)
 if ($WmuxCli)     { $pn += @("--wmux-cli", $WmuxCli) }
 if ($SafeWrapper) { $pn += @("--safe-wrapper", $SafeWrapper) }
+if ($RootPane)    { $pn += @("--root-pane", $RootPane) }
+if ($Layout)      { $pn += @("--layout", $Layout) }
 if ($DryRun)      { $pn += "--dry-run" }
 Invoke-Step "2/5 process-nested-requests" $pn
 
@@ -85,6 +89,8 @@ if ($Chain) {
   $cr = @("$scripts/chain-router.js", "--state", $State, "--max-concurrent", "$MaxConcurrent", "--cwd", $Cwd)
   if ($WmuxCli)     { $cr += @("--wmux-cli", $WmuxCli) }
   if ($SafeWrapper) { $cr += @("--safe-wrapper", $SafeWrapper) }
+  if ($RootPane)    { $cr += @("--root-pane", $RootPane) }
+  if ($Layout)      { $cr += @("--layout", $Layout) }
   if ($DryRun)      { $cr += "--dry-run" }
   Invoke-Step "3/5 chain-router" $cr
 } else {

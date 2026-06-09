@@ -26,7 +26,7 @@ const path = require('path');
 const { loadState, withState, findAgent, makeChildId, addNestedWave, ENGINES, isValidAgentId } = require('./nested-state');
 const { evaluateGuard } = require('./nested-guard');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
-const { allocateGrid, spawnIntoPane, fwd } = require('./pane-spawn');
+const { allocateGrid, allocateSplit, spawnIntoPane, fwd } = require('./pane-spawn');
 const { fence } = require('./data-fence');
 
 const normalizeEngine = (e) => {
@@ -54,6 +54,11 @@ function writeResponse(orchDir, parentId, payload) {
   fs.writeFileSync(tmp, JSON.stringify({ ...payload, respondedAt: new Date().toISOString() }, null, 2) + '\n', 'utf8');
   fs.renameSync(tmp, file);
   return file;
+}
+
+function parentPane(stateFile, parentId) {
+  const found = findAgent(loadState(stateFile), parentId);
+  return found && found.agent ? found.agent.paneId : '';
 }
 
 function childPromptText(child, ctx) {
@@ -156,28 +161,42 @@ function processOne(requestFile, opts) {
     fs.writeFileSync(child.promptFile, childPromptText(child, ctx), 'utf8');
   }
 
-  // 3. Spawn (unless dry-run). Request a grid with one extra cell for the
-  //    orchestrator pane; the new panes come back in newPaneIds, row-major.
+  // 3. Spawn (unless dry-run). Default split layout mirrors the orchestration tree;
+  //    grid stays available as the rollback path and for missing split anchors.
   const spawned = [];
   if (!opts.dryRun) {
-    // If `layout grid` throws, every child must still flow to step 4 and be marked
-    // failed (freeing its slot). Letting the throw escape would skip step 4 and wedge
-    // the children at 'pending' forever — they have no live record yet, so reconcile
-    // could never close them. Treat a grid failure as "no panes allocated".
-    let newPaneIds = [];
-    try { newPaneIds = allocateGrid(opts.wmuxCli, children.length); }
-    catch (e) { process.stderr.write(`process-nested-requests: layout grid failed (${e.message})\n`); }
+    let gridPaneIds = [];
+    const splitRootPane = opts.layout === 'split' ? (parentPane(opts.stateFile, parentId) || opts.rootPane || '') : '';
+    const useGrid = opts.layout === 'grid' || !splitRootPane;
+    if (useGrid) {
+      try { gridPaneIds = allocateGrid(opts.wmuxCli, children.length); }
+      catch (e) { process.stderr.write(`process-nested-requests: layout grid failed (${e.message})\n`); }
+    }
+    let lastGoodPane = '';
     children.forEach((child, i) => {
-      const paneId = newPaneIds[i];
-      if (!paneId) { spawned.push({ id: child.id, error: 'no pane allocated' }); return; }
+      let allocation = {};
+      if (useGrid) {
+        allocation = { paneId: gridPaneIds[i] };
+      } else {
+        allocation = { split: i === 0 ? 'vertical' : 'horizontal', sourcePane: lastGoodPane || splitRootPane };
+        try { allocation.paneId = allocateSplit(opts.wmuxCli, allocation.sourcePane, allocation.split); }
+        catch (e) {
+          process.stderr.write(`process-nested-requests: split failed for ${child.id} (${e.message})\n`);
+          allocation.error = 'no pane allocated';
+        }
+      }
+      const paneId = allocation.paneId;
+      if (!paneId) { spawned.push({ id: child.id, error: allocation.error || 'no pane allocated', split: allocation.split, sourcePane: allocation.sourcePane }); return; }
       try {
         const { agentId, surfaceId } = spawnIntoPane(opts.wmuxCli, paneId, {
           launcher: ctx.launcher, promptFile: child.promptFile, engine: child.engine, label: child.label, cwd: ctx.cwd,
           safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: child.id,
         });
-        spawned.push({ id: child.id, paneId, agentId, surfaceId, label: child.label, engine: child.engine, resultFile: child.resultFile });
+        lastGoodPane = paneId;
+        spawned.push({ id: child.id, paneId, agentId, surfaceId, label: child.label, engine: child.engine, resultFile: child.resultFile,
+          split: allocation.split, sourcePane: allocation.sourcePane });
       } catch (e) {
-        spawned.push({ id: child.id, paneId, error: e.message });
+        spawned.push({ id: child.id, paneId, error: e.message, split: allocation.split, sourcePane: allocation.sourcePane });
       }
     });
     // 4. Reflect spawn outcome into state (one lock pass).
@@ -208,6 +227,8 @@ function main() {
     launcher: getFlag('--launcher', path.join(__dirname, 'launch-agent-ext.js')),
     wmuxCli: getFlag('--wmux-cli', process.env.WMUX_CLI || ''),
     safeWrapper: getFlag('--safe-wrapper', process.env.WMUX_SAFE_WRAPPER || ''),
+    rootPane: getFlag('--root-pane', process.env.WMUX_PANE_ID || ''),
+    layout: (getFlag('--layout', 'split') || 'split').toLowerCase(),
     maxDepth: parseInt(getFlag('--max-depth', '5'), 10),
     maxConcurrent: parseInt(getFlag('--max-concurrent', '8'), 10),
     cwd: getFlag('--cwd', process.cwd()),

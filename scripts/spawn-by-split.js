@@ -28,24 +28,12 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 const { loadState, withState, findAgent, isValidAgentId } = require('./nested-state');
-const { spawnIntoPane } = require('./pane-spawn');
+const { allocateSplit, spawnIntoPane } = require('./pane-spawn');
 
 function getFlag(name, fallback) {
   const i = process.argv.indexOf(name);
   return i !== -1 && i + 1 < process.argv.length ? process.argv[i + 1] : fallback;
-}
-
-function splitPane(wmuxCli, sourcePane, horizontal) {
-  // Focus the parent so the split lands on it (split has no --pane targeting).
-  if (sourcePane) execFileSync('node', [wmuxCli, 'focus-pane', sourcePane], { encoding: 'utf8' });
-  const args = [wmuxCli, 'split'];
-  if (horizontal) args.push('--down'); // 'down' = horizontal divider = sibling stacking
-  const out = execFileSync('node', args, { encoding: 'utf8' });
-  const parsed = JSON.parse(out);
-  if (!parsed.paneId) throw new Error(`split returned no paneId: ${out}`);
-  return parsed.paneId;
 }
 
 function main() {
@@ -78,7 +66,7 @@ function main() {
 
   // 1. Allocate the pane with the directional split.
   const horizontal = splitMode === 'horizontal' || splitMode === 'sibling';
-  const paneId = splitPane(wmuxCli, sourcePane, horizontal);
+  const paneId = allocateSplit(wmuxCli, sourcePane, horizontal ? 'horizontal' : 'vertical');
 
   // 2. Spawn into it through the SAME path process-nested/chain-router use.
   let spawnRes;
