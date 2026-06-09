@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Context Meter (180k)"
-status: pending
+status: done
 priority: P2
 effort: "2-3h"
 dependencies: []
@@ -51,9 +51,11 @@ worker xong 1 đơn vị →
 
 ## Success Criteria
 
-- [ ] Worker xác định được session/transcript của CHÍNH NÓ (hoặc fallback work-units xác nhận).
-- [ ] `context-meter.js` trả continue/handoff/unknown đúng; `unknown` không gây chạy-mãi hay churn.
-- [ ] Token chỉ là safety eject; work-units là tín hiệu chính (né auto-compact).
+- [x] Worker xác định được session/transcript của CHÍNH NÓ. Verified: child claude worker có `CLAUDE_CODE_SESSION_ID` RIÊNG (`b61b62b9…` ≠ orchestrator); meter scan-by-UUID tìm đúng transcript con dù ở project-dir khác (theo cwd child).
+- [x] `context-meter.js` trả continue/handoff/unknown đúng (5 nhánh test pass); `unknown` không chạy-mãi hay churn (theo unit budget thuần).
+- [x] Token chỉ là safety eject; work-units là tín hiệu chính. Công thức token = `input + cache_creation + cache_read` (context window thật, KHÔNG input_tokens thuần — empirically verified).
+
+**Đã build:** `scripts/context-meter.js` (primary=units, eject=token>180k, fail-state="unknown" có lý do phân biệt not-found/no-usage/unreadable). Hardened sau review: threshold falsy-zero guard, strip-BOM, `Math.max(0,units)`.
 
 ## Risk Assessment
 
