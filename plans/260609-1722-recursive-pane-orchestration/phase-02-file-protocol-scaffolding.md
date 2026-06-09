@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Codex Engine + Wrapper Protocol"
-status: pending
+status: done
 priority: P1
 effort: "2-3h"
 dependencies: [1]
@@ -54,9 +54,11 @@ schemaFile = {filesChanged[], decisions[], remaining[], blockers[], status}
 
 ## Success Criteria
 
-- [ ] `WMUX_AGENT_CMD=codex` spawn Codex headless vào pane, tự chạy, không hỏi approval.
-- [ ] Result file đúng schema (parse được) + JSONL log persisted kể cả khi Codex lỗi.
-- [ ] Plugin gốc (`launch-agent.js`) KHÔNG bị sửa; claude/opencode vẫn chạy.
+- [x] `--engine codex` (qua argv, vì `agent spawn` không truyền env) spawn Codex headless vào pane, tự chạy, không hỏi approval. Verified: spawn pane → hello2.txt tạo ~12s.
+- [x] Result file đúng schema (parse được, đủ 5 key) + JSONL log persisted (tee streaming, flush-on-exit cho forensics khi Codex lỗi).
+- [x] Plugin gốc (`launch-agent.js`) KHÔNG bị sửa; fork `launch-agent-ext.js`; claude/opencode branch byte-identical upstream (code-reviewer xác nhận).
+
+**Đã build:** `scripts/launch-agent-ext.js` (engine resolution: `--engine` > `WMUX_AGENT_CMD` > claude; codex branch stdin='ignore' tránh hang, tee JSONL), `scripts/codex-result-schema.json` (strict, 5 required key). Auth = ChatGPT subscription (`OPENAI_API_KEY` null), KHÔNG tốn API.
 
 ## Risk Assessment
 

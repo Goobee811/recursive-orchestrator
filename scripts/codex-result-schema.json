@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["done", "blocked", "partial"],
+      "description": "done = task fully complete; partial = some units left; blocked = could not proceed"
+    },
+    "filesChanged": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repo-relative paths of every file created/modified/deleted"
+    },
+    "decisions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Key decisions made and the WHY, so the Leader can reconstruct a handoff"
+    },
+    "remaining": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Work not yet done (empty when status=done)"
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What stopped progress (empty unless status=blocked)"
+    }
+  },
+  "required": ["status", "filesChanged", "decisions", "remaining", "blockers"]
+}
