@@ -77,13 +77,14 @@ An toàn: backup+denylist, data-fence, secret-scan, runtime write-fence bọc la
 | 2 | [Codex Engine + Wrapper Protocol](./phase-02-file-protocol-scaffolding.md) | P1 | P1 | ✅ Done — codex headless verified (direct + wmux pane), result đúng schema + JSONL forensics; plugin gốc nguyên |
 | 3 | [Context Meter (180k)](./phase-03-context-meter.md) | P2 | — | ✅ Done — meter 5 nhánh pass; child worker có session-id riêng, scan-UUID tìm đúng transcript con |
 | 4 | [Nested Recursion Engine](./phase-04-orchestration-engine.md) | P1 | P1 | ✅ Done — FALLBACK (Orchestrator trung gian): guard chốt cứng + register nested wave + request/response; 32 test PASS + e2e spawn thật; 4 hardening (C1/C2/H1/H2); GO-nested bỏ (YAGNI per spike) |
-| 5 | [Continuation Chain + Reverse-Relay](./phase-05-handoff-chain-lifecycle.md) | P1 | P2,P3 | Pending |
+| 5 | [Continuation Chain + Reverse-Relay](./phase-05-handoff-chain-lifecycle.md) | P1 | P2,P3 | 🚧 In-progress — 5A reconcile (**H3 giải**) ✅ + 5B chain/reverse-relay ✅ (104 test PASS, review pass); 5C leader-aggregate pending |
 | 6 | [Safety Layers](./phase-06-safety-layers.md) | P1 | P2 | Pending |
 | 7 | [E2E Test + Default Mode Packaging](./phase-07-default-mode-packaging.md) | P2 | P4,P5,P6 | Pending |
 
 ## Rủi ro tổng
 
 - **[VERIFIED 2026-06-09 — confirmed]** Nested spawn KHÔNG khả thi sạch từ pane worker: `layout grid --anchor-surface` reshape phẳng + gom nhầm surface orchestrator; `split` không có anchor (chỉ focused pane → focus-steal/race). → Phase 4 dùng **Orchestrator trung gian** (worker ghi intent → Orchestrator spawn hộ, registry chain giữ cây nested logic). Chi tiết: [spike report](../reports/spike-260609-nested-spawn-capability-report.md).
+- **[RESOLVED 2026-06-09 — Phase 5A]** H3 (nested/chain child kẹt `running`): `wmux agent spawn` không nhận hook `on-agent-stop` (chỉ native subagent). → `reconcile-agents.js` poll `wmux agent list` mỗi monitor pass → `exited`→terminal + giải phóng slot + đóng wave. Verified 27 test + daemon thật.
 - **Sửa plugin (`launch-agent.js`) làm hỏng path claude/opencode** → fork bản copy thay vì sửa in-place; giữ plugin gốc nguyên vẹn.
 - **180k token non-monotonic do auto-compact** → đếm work-units là primary, token chỉ safety eject.
 - **Codex chết trước khi ghi `-o`** → capture `--json` ra file + Leader verify diff file đích trước khi báo done.

@@ -23,9 +23,10 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 const { loadState, withState, findAgent, makeChildId, addNestedWave, ENGINES, isValidAgentId } = require('./nested-state');
 const { evaluateGuard } = require('./nested-guard');
+const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
+const { allocateGrid, spawnIntoPane, fwd } = require('./pane-spawn');
 
 const normalizeEngine = (e) => {
   const v = String(e || 'claude').toLowerCase();
@@ -37,9 +38,6 @@ function getFlag(name, fallback) {
   return i !== -1 && i + 1 < process.argv.length ? process.argv[i + 1] : fallback;
 }
 const hasFlag = (name) => process.argv.includes(name);
-// wmux --cmd runs in a shell pane; forward-slash Windows paths avoid backslash
-// escaping headaches and are accepted by node + bash + PowerShell alike.
-const fwd = (p) => p.replace(/\\/g, '/');
 
 function setRequestStatus(requestFile, status) {
   const req = JSON.parse(fs.readFileSync(requestFile, 'utf8'));
@@ -95,23 +93,6 @@ Write your result file to: ${child.resultFile}
 `;
 }
 
-// Spawn one child into a pane via the wmux CLI. Returns { agentId, surfaceId }.
-function spawnChild(wmuxCli, paneId, child, ctx) {
-  const promptFwd = fwd(child.promptFile);
-  const launcherFwd = fwd(ctx.launcher);
-  const engineArg = child.engine && child.engine !== 'claude' ? ` --engine ${child.engine}` : '';
-  const cmd = `node "${launcherFwd}" "${promptFwd}"${engineArg}`;
-  const out = execFileSync('node', [
-    wmuxCli, 'agent', 'spawn',
-    '--pane', paneId,
-    '--cmd', cmd,
-    '--label', child.label,
-    '--cwd', ctx.cwd,
-  ], { encoding: 'utf8' });
-  const parsed = JSON.parse(out);
-  return { agentId: parsed.agentId, surfaceId: parsed.surfaceId };
-}
-
 function processOne(requestFile, opts) {
   const orchDir = path.dirname(opts.stateFile);
   const request = JSON.parse(fs.readFileSync(requestFile, 'utf8'));
@@ -159,7 +140,7 @@ function processOne(requestFile, opts) {
       return {
         id, label: t.label, subtask: t.subtask, files: t.files || [], excludeFiles: t.excludeFiles || [],
         engine: normalizeEngine(t.engine), parentAgentId: parentId, depth: verdict.childDepth,
-        paneId: null, surfaceId: null, status: 'pending', exitCode: null, toolUses: 0,
+        paneId: null, surfaceId: null, wmuxAgentId: null, status: 'pending', exitCode: null, toolUses: 0,
         resultFile: path.join(orchDir, `agent-${id}-result.md`), startedAt: null, finishedAt: null,
       };
     });
@@ -177,15 +158,20 @@ function processOne(requestFile, opts) {
   //    orchestrator pane; the new panes come back in newPaneIds, row-major.
   const spawned = [];
   if (!opts.dryRun) {
-    const layoutOut = execFileSync('node', [
-      opts.wmuxCli, 'layout', 'grid', '--count', String(children.length + 1), '--type', 'terminal',
-    ], { encoding: 'utf8' });
-    const newPaneIds = (JSON.parse(layoutOut).newPaneIds) || [];
+    // If `layout grid` throws, every child must still flow to step 4 and be marked
+    // failed (freeing its slot). Letting the throw escape would skip step 4 and wedge
+    // the children at 'pending' forever — they have no live record yet, so reconcile
+    // could never close them. Treat a grid failure as "no panes allocated".
+    let newPaneIds = [];
+    try { newPaneIds = allocateGrid(opts.wmuxCli, children.length); }
+    catch (e) { process.stderr.write(`process-nested-requests: layout grid failed (${e.message})\n`); }
     children.forEach((child, i) => {
       const paneId = newPaneIds[i];
       if (!paneId) { spawned.push({ id: child.id, error: 'no pane allocated' }); return; }
       try {
-        const { agentId, surfaceId } = spawnChild(opts.wmuxCli, paneId, child, ctx);
+        const { agentId, surfaceId } = spawnIntoPane(opts.wmuxCli, paneId, {
+          launcher: ctx.launcher, promptFile: child.promptFile, engine: child.engine, label: child.label, cwd: ctx.cwd,
+        });
         spawned.push({ id: child.id, paneId, agentId, surfaceId, label: child.label, engine: child.engine, resultFile: child.resultFile });
       } catch (e) {
         spawned.push({ id: child.id, paneId, error: e.message });
@@ -198,7 +184,7 @@ function processOne(requestFile, opts) {
         const found = findAgent(state, s.id);
         if (!found) continue;
         if (s.error) { found.agent.status = 'failed'; found.agent.exitCode = -1; }
-        else { found.agent.paneId = s.paneId; found.agent.surfaceId = s.surfaceId; found.agent.status = 'running'; found.agent.startedAt = now; }
+        else { found.agent.paneId = s.paneId; found.agent.surfaceId = s.surfaceId; found.agent.wmuxAgentId = s.agentId; found.agent.status = 'running'; found.agent.startedAt = now; }
       }
     });
   } else {
@@ -233,11 +219,28 @@ function main() {
   }
 
   const orchDir = path.dirname(opts.stateFile);
+
+  // Reconcile first: close out any child whose pane process already exited so its
+  // concurrency slot is freed BEFORE the guard re-checks the pending requests below
+  // (otherwise a dead-but-still-'running' child could deny a fresh, valid spawn).
+  // wmux-spawned agents get no SubagentStop hook, so this poll is the only path
+  // that ever moves them off 'running'. A list failure must not wedge the loop.
+  let reconciled = null;
+  if (!opts.dryRun && opts.wmuxCli) {
+    try {
+      const live = fetchLiveAgents(opts.wmuxCli);
+      reconciled = withState(opts.stateFile, (state) => reconcile(state, live));
+    } catch (e) {
+      reconciled = { error: e.message };
+      process.stderr.write(`process-nested-requests: reconcile skipped (${e.message})\n`);
+    }
+  }
+
   const requestFiles = fs.readdirSync(orchDir)
     .filter((f) => /^nested-request-.+\.json$/.test(f))
     .map((f) => path.join(orchDir, f));
 
-  const processed = [], denied = [];
+  const processed = [], denied = [], errored = [];
   let skipped = 0;
   for (const file of requestFiles) {
     let r;
@@ -245,9 +248,10 @@ function main() {
     catch (e) { r = { status: 'error', file, error: e.message }; }
     if (r.status === 'skipped') skipped++;
     else if (r.status === 'denied') denied.push(r);
+    else if (r.status === 'error') errored.push(r);
     else processed.push(r);
   }
-  process.stdout.write(JSON.stringify({ processed, denied, skipped }, null, 2) + '\n');
+  process.stdout.write(JSON.stringify({ reconciled, processed, denied, errored, skipped }, null, 2) + '\n');
 }
 
 main();

@@ -1,13 +1,27 @@
 ---
 phase: 5
 title: "Continuation Chain + Reverse-Relay"
-status: pending
+status: in-progress
 priority: P1
 effort: "4-6h"
 dependencies: [2, 3]
 ---
 
 # Phase 5: Continuation Chain (180k) + Reverse-Relay Handoff
+
+## Progress (2026-06-09)
+
+| Phần | Trạng thái | Files | Test |
+|------|-----------|-------|------|
+| **5A — Reconcile lifecycle (giải H3)** | ✅ Done | `reconcile-agents.js`, `process-nested-requests.js` (+`wmuxAgentId`, reconcile đầu pass), `pane-spawn.js` (DRY) | 27 PASS + verify daemon thật |
+| **5B — Chain + reverse-relay** | ✅ Done | `chain-request.js` (worker intent), `chain-router.js` (route spawn-next/relay) | 45 PASS |
+| **5C — Leader aggregate** | ⏳ Pending | `leader-aggregate.ps1` (gộp chain + Codex diff-verify + trail) | — |
+
+**H3 GIẢI:** `wmux agent spawn` không có hook `on-agent-stop` → child kẹt `running`. `reconcile-agents.js` poll `wmux agent list` (`{agents:[{agentId,surfaceId,status:running\|exited,exitCode}]}`) → active→terminal (exitCode 0=completed, else failed), giải phóng slot + đóng wave. Map child↔live qua `wmuxAgentId` rồi `surfaceId`; chỉ đụng id đã có trong state (không chạm pane user). Chạy đầu mỗi monitor pass của process-nested + chain-router (an toàn standalone).
+
+**Code-review (code-reviewer):** 0 Critical. Fix H-1 (grid-fail slot leak), M-1 (error misclassify), M-2 (chain-router reconcile standalone). Defer M-3 (TOCTOU 2-pass — single-actor tuần tự, không thực), M-4 (cwd — worker full-trust → Phase 6). Report: `plans/reports/code-review-260609-2221-phase5-engine-reconcile-chain-report.md`.
+
+**Quyết định kỹ thuật chốt:** continuation GIỮ NGUYÊN depth (cùng việc, phiên mới — KHÔNG phải nesting, chỉ tốn slot); termination = `nextLink==null` + relay marker (KHÔNG dùng frontmatter — H5/H6); chain link = nested wave 1-agent.
 
 ## Overview
 
@@ -55,10 +69,11 @@ Leader: với mỗi link → nếu codex: đọc -o/jsonl + DIFF file đích →
 
 ## Success Criteria
 
-- [ ] Worker chạm ngưỡng → spawn worker kế tự động nối state, không mất tiến độ.
-- [ ] Wn → reverse-relay đúng về Leader qua state (`nextLink==null`), không phụ thuộc frontmatter.
-- [ ] Codex link: Leader viết handoff hợp lệ từ `-o`/jsonl + verify diff (không false-positive).
-- [ ] Trail gộp đúng thứ tự `linkSeq`, không gom nhầm chain khác (slug=chainId duy nhất).
+- [x] Worker chạm ngưỡng → spawn worker kế tự động nối state, không mất tiến độ. *(5B; logic + dry-run verified, real spawn ở Phase 7 E2E)*
+- [x] Wn → reverse-relay đúng về Leader qua state (`nextLink==null`), không phụ thuộc frontmatter. *(5B + relay marker)*
+- [x] **(H3)** Nested/chain child `exited` được reconcile → terminal + giải phóng slot + đóng wave. *(5A; 27 test + daemon thật)*
+- [ ] Codex link: Leader viết handoff hợp lệ từ `-o`/jsonl + verify diff (không false-positive). *(5C pending)*
+- [ ] Trail gộp đúng thứ tự `linkSeq`, không gom nhầm chain khác (slug=chainId duy nhất). *(5C pending)*
 
 ## Risk Assessment
 
