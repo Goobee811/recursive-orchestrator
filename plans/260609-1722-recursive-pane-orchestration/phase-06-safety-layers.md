@@ -1,13 +1,29 @@
 ---
 phase: 6
 title: "Safety Layers"
-status: pending
+status: done
 priority: P1
 effort: "3-5h"
 dependencies: [2]
 ---
 
 # Phase 6: Safety Layers — 4 lớp an toàn bọc launch path
+
+## Progress (2026-06-09)
+
+| Lớp | Trạng thái | Files | Test |
+|------|-----------|-------|------|
+| **1 — Backup + git checkpoint + denylist + write-fence** | ✅ Done | `safe-launch-wrapper.ps1` | win32 e2e: backup pre-run, denylist abort, Format-Table không chặn nhầm |
+| **2 — Data-fence** (DATA block + chống here-string `'@`) | ✅ Done + **wired** | `data-fence.js` → nhúng vào `childPromptText`/`continuationPromptText` | fence gutter chặn forged marker; here-string guard; mission/remaining fenced |
+| **3 — Secret-scan** (reuse `SENSITIVE_PATTERNS` + fallback) | ✅ Done | `scan-secrets.js` | gate prompt pre-flight + **result post-run quarantine**; CLI exit 0/1/2 |
+| **4 — Crash-recovery** (marker + heartbeat) | ✅ Done | `crash-recovery.js` | marker round-trip; stale detect + **live cross-check** (không false-crash worker unit dài); `--mark` gated |
+| Integration opt-in | ✅ Done | `pane-spawn.js buildLaunchCmd` + `--safe-wrapper` (process-nested, chain-router) | default OFF → 104 test Phase 4/5 zero regression |
+
+**Test:** `node scripts/spike/test-safety-phase6.js` → **64 PASS** (tổng dự án 168).
+
+**Code-review (code-reviewer):** 0 Critical. Fix H-1 (data-fence chưa wire → wire vào 2 prompt builder), H-2 (heartbeat false-crash worker unit dài → cross-check `wmux agent list`, `--mark` chỉ chạy khi có cross-check), M-1 (write-fence parse rename/space → `core.quotepath=false`), M-2 (`Format-` empty-alternation chặn mọi Format-* → `Format-Volume\b`), M-3 (quét result trước Leader đọc → wrapper post-run quarantine), M-4 (backup over-collect glob `..` → cấm traversal). Accept L-1/L-2 (không reachable, callers normalize), L-3 (denylist trip prose — fail-safe bias có chủ đích + `-AllowDestructive`). Report: `plans/reports/code-review-260609-2303-phase6-safety-layers-report.md`.
+
+**Quyết định chốt:** write-fence dưới full-bypass = **detect + optional restore** (không thể abort tại thời điểm ghi) → **backup + git checkpoint là net chính, bắt buộc**; crash `--mark` cần ground-truth (live list vanished) chứ không mark theo thời gian đơn thuần; `SENSITIVE_PATTERNS` reuse từ context-handoff, fallback nội bộ khi skill vắng.
 
 ## Overview
 
@@ -52,11 +68,11 @@ launch-agent-ext.js (wrap):
 
 ## Success Criteria
 
-- [ ] Backup file-set tồn tại trước mọi lần worker ghi; lệnh hủy diệt bị chặn.
-- [ ] Ghi ngoài allowed-glob bị abort (không corrupt file ngoài zone).
-- [ ] Secret giả trong spec/result/`-o` bị quét + chặn trước khi vào handoff.
-- [ ] Nội dung chứa `'@`/injection không thực thi (data-fence + codegen-safe).
-- [ ] Worker "chết" giữa chừng được phát hiện qua heartbeat + recover từ marker.
+- [x] Backup file-set tồn tại trước mọi lần worker ghi; lệnh hủy diệt bị chặn. *(wrapper backup pre-spawn + denylist abort spec; test A/B)*
+- [x] Ghi ngoài allowed-glob được **phát hiện** (+ optional `-RestoreOutOfZone` revert từ git). *(Dưới full-bypass KHÔNG abort được tại thời điểm ghi — backup + git checkpoint là net chính, đã chốt trong Risk Assessment.)*
+- [x] Secret giả trong spec/result/`-o` bị quét + chặn trước khi vào handoff. *(prompt pre-flight + result post-run quarantine; CLI gate; test C/D)*
+- [x] Nội dung chứa `'@`/injection không thực thi (data-fence + codegen-safe). *(gutter chống forged marker + here-string guard; wired vào 2 prompt builder; test [1][2][9])*
+- [x] Worker "chết" giữa chừng được phát hiện qua heartbeat + recover từ marker. *(marker mang `resultFile`/`unitsDone` cho successor; live cross-check chống false-crash; wiring successor-spawn vào monitor loop = Phase 7)*
 
 ## Risk Assessment
 

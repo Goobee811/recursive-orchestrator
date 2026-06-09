@@ -28,6 +28,7 @@ const path = require('path');
 const { loadState, withState, findAgent, addNestedWave, countActive, ENGINES, isValidAgentId } = require('./nested-state');
 const { allocateGrid, spawnIntoPane, fwd } = require('./pane-spawn');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
+const { fence } = require('./data-fence');
 
 const MAX_LABEL = 200;
 const MAX_REMAINING = 8000;
@@ -120,7 +121,8 @@ function sanitizeNext(next, orchDir, linkId) {
 
 function continuationPromptText(link, ctx) {
   const list = (arr, empty) => (arr && arr.length ? arr.map((f) => `- ${f}`).join('\n') : empty);
-  return `# Continuation: ${link.label}
+  const oneLine = (s) => String(s == null ? '' : s).replace(/[\r\n]+/g, ' ');
+  return `# Continuation: ${oneLine(link.label)}
 
 ## Chain Context
 You are ${link.id} — link ${link.linkSeq} of continuation chain ${link.chainId}.
@@ -133,7 +135,7 @@ ${link.prevResultFile ? `- ${link.prevResultFile}` : '- (no prior result file re
 That file lists what was done, the decisions made, and the work that remains.
 
 ## Remaining Work
-${link.remaining}
+${fence(link.remaining, 'remaining-work spec from the previous link')}
 
 ## Your Zone of Work
 Allowed files (you MAY modify these):
@@ -244,6 +246,7 @@ function routeOne(requestFile, opts) {
       try {
         const { agentId, surfaceId } = spawnIntoPane(opts.wmuxCli, paneId, {
           launcher: opts.launcher, promptFile: link.promptFile, engine: link.engine, label: link.label, cwd: ctx.cwd,
+          safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: link.id,
         });
         const now = new Date().toISOString();
         withState(opts.stateFile, (state) => {
@@ -280,6 +283,7 @@ function main() {
     stateFile: getFlag('--state', ''),
     launcher: getFlag('--launcher', path.join(__dirname, 'launch-agent-ext.js')),
     wmuxCli: getFlag('--wmux-cli', process.env.WMUX_CLI || ''),
+    safeWrapper: getFlag('--safe-wrapper', process.env.WMUX_SAFE_WRAPPER || ''),
     maxConcurrent: parseInt(getFlag('--max-concurrent', '8'), 10),
     cwd: getFlag('--cwd', process.cwd()),
     dryRun: hasFlag('--dry-run'),

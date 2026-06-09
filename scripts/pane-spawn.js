@@ -12,11 +12,33 @@
 
 'use strict';
 
+const path = require('path');
 const { execFileSync } = require('child_process');
 
 // wmux --cmd runs in a shell pane; forward-slash Windows paths sidestep backslash
 // escaping and are accepted by node + bash + PowerShell alike.
 const fwd = (p) => String(p).replace(/\\/g, '/');
+
+// Build the pane --cmd string. Default = launch the agent directly. When `safeWrapper`
+// is given, route the launch through the PowerShell safety wrapper instead, which does
+// backup + denylist + secret pre-flight + write-fence around the same launcher. The
+// wrapper reads the worker's allowed file set from state.json by agent id, so stateFile
+// + agentId travel with it. engine/agentId are slug-constrained here so neither can
+// inject extra tokens into the command (callers already normalize them; this is depth).
+function buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, agentId }) {
+  const safeEngine = /^[a-z]+$/i.test(engine || '') ? engine : 'claude';
+  if (safeWrapper) {
+    const q = (p) => `"${fwd(p)}"`;
+    let cmd = `powershell -NoProfile -ExecutionPolicy Bypass -File ${q(safeWrapper)}`
+      + ` -Launcher ${q(launcher)} -PromptFile ${q(promptFile)} -Engine ${safeEngine}`
+      + ` -ScriptsDir ${q(path.dirname(safeWrapper))}`;
+    if (stateFile) cmd += ` -StateFile ${q(stateFile)}`;
+    if (agentId && /^[A-Za-z0-9._-]+$/.test(agentId)) cmd += ` -AgentId ${agentId}`;
+    return cmd;
+  }
+  const engineArg = safeEngine && safeEngine !== 'claude' ? ` --engine ${safeEngine}` : '';
+  return `node "${fwd(launcher)}" "${fwd(promptFile)}"${engineArg}`;
+}
 
 // Ask wmux for a balanced grid big enough for `workerCount` new panes PLUS the
 // orchestrator's own cell, and return the new pane ids (row-major, length workerCount).
@@ -34,9 +56,8 @@ function allocateGrid(wmuxCli, workerCount) {
 // because `wmux agent spawn` cannot pass env vars to the pane process (so the engine
 // can't ride WMUX_AGENT_CMD here). Returns wmux's { agentId, surfaceId } — agentId is
 // what reconcile-agents.js later matches against `wmux agent list`.
-function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, cwd }) {
-  const engineArg = engine && engine !== 'claude' ? ` --engine ${engine}` : '';
-  const cmd = `node "${fwd(launcher)}" "${fwd(promptFile)}"${engineArg}`;
+function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, cwd, safeWrapper, stateFile, agentId }) {
+  const cmd = buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, agentId });
   const out = execFileSync('node', [
     wmuxCli, 'agent', 'spawn',
     '--pane', paneId,
@@ -48,4 +69,4 @@ function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, c
   return { agentId: parsed.agentId, surfaceId: parsed.surfaceId };
 }
 
-module.exports = { allocateGrid, spawnIntoPane, fwd };
+module.exports = { allocateGrid, spawnIntoPane, buildLaunchCmd, fwd };

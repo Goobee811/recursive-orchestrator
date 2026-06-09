@@ -27,6 +27,7 @@ const { loadState, withState, findAgent, makeChildId, addNestedWave, ENGINES, is
 const { evaluateGuard } = require('./nested-guard');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
 const { allocateGrid, spawnIntoPane, fwd } = require('./pane-spawn');
+const { fence } = require('./data-fence');
 
 const normalizeEngine = (e) => {
   const v = String(e || 'claude').toLowerCase();
@@ -57,7 +58,8 @@ function writeResponse(orchDir, parentId, payload) {
 
 function childPromptText(child, ctx) {
   const list = (arr, empty) => (arr && arr.length ? arr.map((f) => `- ${f}`).join('\n') : empty);
-  return `# Mission: ${child.label}
+  const oneLine = (s) => String(s == null ? '' : s).replace(/[\r\n]+/g, ' ');
+  return `# Mission: ${oneLine(child.label)}
 
 ## Nested Orchestration Context
 You are ${child.id}, a nested worker at depth ${child.depth} (orchestrator=0, max ${ctx.maxDepth}).
@@ -72,7 +74,7 @@ Excluded files (you MUST NOT modify these):
 ${list(child.excludeFiles, '- (none specified)')}
 
 ## Your Mission
-${child.subtask}
+${fence(child.subtask, 'mission spec relayed for your parent')}
 
 ## If you must fan out further
 You cannot create panes yourself. Write an intent file and the orchestrator spawns for you:
@@ -171,6 +173,7 @@ function processOne(requestFile, opts) {
       try {
         const { agentId, surfaceId } = spawnIntoPane(opts.wmuxCli, paneId, {
           launcher: ctx.launcher, promptFile: child.promptFile, engine: child.engine, label: child.label, cwd: ctx.cwd,
+          safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: child.id,
         });
         spawned.push({ id: child.id, paneId, agentId, surfaceId, label: child.label, engine: child.engine, resultFile: child.resultFile });
       } catch (e) {
@@ -204,6 +207,7 @@ function main() {
     anchor: getFlag('--anchor', process.env.WMUX_SURFACE_ID || ''),
     launcher: getFlag('--launcher', path.join(__dirname, 'launch-agent-ext.js')),
     wmuxCli: getFlag('--wmux-cli', process.env.WMUX_CLI || ''),
+    safeWrapper: getFlag('--safe-wrapper', process.env.WMUX_SAFE_WRAPPER || ''),
     maxDepth: parseInt(getFlag('--max-depth', '5'), 10),
     maxConcurrent: parseInt(getFlag('--max-concurrent', '8'), 10),
     cwd: getFlag('--cwd', process.cwd()),
