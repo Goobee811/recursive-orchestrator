@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Repo Bootstrap + Baseline + Nesting Spike"
-status: pending
+status: done
 priority: P1
 effort: "2.5-3.5h"
 dependencies: []

@@ -73,7 +73,7 @@ An toàn: backup+denylist, data-fence, secret-scan, runtime write-fence bọc la
 
 | Phase | Tên | Priority | Phụ thuộc | Status |
 |-------|------|----------|-----------|--------|
-| 1 | [Repo Bootstrap + Baseline + Nesting Spike](./phase-01-spike-verify-wmux.md) | P1 | — | Pending |
+| 1 | [Repo Bootstrap + Baseline + Nesting Spike](./phase-01-spike-verify-wmux.md) | P1 | — | ✅ Done — baseline PASS; nested=FALLBACK ([spike report](../reports/spike-260609-nested-spawn-capability-report.md)) |
 | 2 | [Codex Engine + Wrapper Protocol](./phase-02-file-protocol-scaffolding.md) | P1 | P1 | Pending |
 | 3 | [Context Meter (180k)](./phase-03-context-meter.md) | P2 | — | Pending |
 | 4 | [Nested Recursion Engine](./phase-04-orchestration-engine.md) | P1 | P1 | Pending |
@@ -83,7 +83,7 @@ An toàn: backup+denylist, data-fence, secret-scan, runtime write-fence bọc la
 
 ## Rủi ro tổng
 
-- **Nested spawn không khả thi từ pane worker** (Phase 1 fail) → fallback: nested do Orchestrator làm trung gian (Leader gửi yêu cầu pane qua file, Orchestrator split+spawn hộ); hoặc hạ về flat waves cho nhánh đó.
+- **[VERIFIED 2026-06-09 — confirmed]** Nested spawn KHÔNG khả thi sạch từ pane worker: `layout grid --anchor-surface` reshape phẳng + gom nhầm surface orchestrator; `split` không có anchor (chỉ focused pane → focus-steal/race). → Phase 4 dùng **Orchestrator trung gian** (worker ghi intent → Orchestrator spawn hộ, registry chain giữ cây nested logic). Chi tiết: [spike report](../reports/spike-260609-nested-spawn-capability-report.md).
 - **Sửa plugin (`launch-agent.js`) làm hỏng path claude/opencode** → fork bản copy thay vì sửa in-place; giữ plugin gốc nguyên vẹn.
 - **180k token non-monotonic do auto-compact** → đếm work-units là primary, token chỉ safety eject.
 - **Codex chết trước khi ghi `-o`** → capture `--json` ra file + Leader verify diff file đích trước khi báo done.
