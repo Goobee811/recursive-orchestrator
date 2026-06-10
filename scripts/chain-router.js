@@ -117,7 +117,25 @@ function sanitizeNext(next, orchDir, linkId) {
   return { label, remaining, engine: normalizeEngine(n.engine), files, excludeFiles, prevResultFile };
 }
 
+function resolvePrevResultFallback(spec, orchDir, fromAgentId) {
+  if (!spec.prevResultFile) return spec;
+  const prevResultPath = path.isAbsolute(spec.prevResultFile) ? spec.prevResultFile : path.join(orchDir, spec.prevResultFile);
+  if (fs.existsSync(prevResultPath)) return { ...spec, prevResultFileExists: true };
+  const prevOutJsonl = path.join(orchDir, `agent-${fromAgentId}-out.jsonl`);
+  return { ...spec, prevResultFileExists: false, prevOutJsonl: fs.existsSync(prevOutJsonl) ? prevOutJsonl : '' };
+}
+
 // ── prompt for a continuation link ──────────────────────────────────────────
+
+function readFirstText(link) {
+  if (link.prevResultFile && link.prevResultFileExists !== false) return `- ${link.prevResultFile}`;
+  if (link.prevResultFile && link.prevOutJsonl) {
+    return `- Result file not written yet for ${link.prevResultFile}; the previous link may have exited cleanly before harvest.
+- Read ${link.prevOutJsonl} instead.
+- The result file may appear later after harvest.`;
+  }
+  return '- (no prior result file recorded — read the chain so far)';
+}
 
 function continuationPromptText(link, ctx) {
   const list = (arr, empty) => (arr && arr.length ? arr.map((f) => `- ${f}`).join('\n') : empty);
@@ -131,7 +149,7 @@ it left off; do not redo finished work. Depth ${link.depth} (unchanged across th
 Working directory: ${ctx.cwd}
 
 ## Read First — previous link's result
-${link.prevResultFile ? `- ${link.prevResultFile}` : '- (no prior result file recorded — read the chain so far)'}
+${readFirstText(link)}
 That file lists what was done, the decisions made, and the work that remains.
 
 ## Remaining Work
@@ -166,6 +184,7 @@ function applySpawnNext(state, plan, spec, orchDir) {
     files: spec.files, excludeFiles: spec.excludeFiles, engine: spec.engine,
     chainId: plan.chainId, linkSeq: plan.nextSeq, nextLink: null, leaderAgentId: plan.leaderAgentId,
     parentAgentId: plan.fromAgentId, depth: plan.depth, prevResultFile: spec.prevResultFile,
+    prevResultFileExists: spec.prevResultFileExists, prevOutJsonl: spec.prevOutJsonl || '',
     paneId: null, surfaceId: null, wmuxAgentId: null, status: 'pending', exitCode: null, toolUses: 0,
     resultFile: path.join(orchDir, `agent-${id}-result.md`), startedAt: null, finishedAt: null,
   };
@@ -245,7 +264,7 @@ function routeOne(requestFile, opts) {
   }
 
   // spawn-next
-  const spec = sanitizeNext(request.next, orchDir, null);
+  const spec = resolvePrevResultFallback(sanitizeNext(request.next, orchDir, null), orchDir, plan.fromAgentId);
   const fromPane = paneOf(opts.stateFile, plan.fromAgentId);
   setRequestStatus(requestFile, 'processing');
   const ctx = { cwd: request.cwd || opts.cwd, scriptsDir: __dirname, stateFile: opts.stateFile };

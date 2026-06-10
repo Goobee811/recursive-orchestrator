@@ -132,6 +132,8 @@ console.log('\n[5] router spawn-next (dry-run)');
 {
   const dir = mkOrch('route', baseState([agent('w1', 'running', { depth: 2, chainId: 'chain-w1', linkSeq: 1, leaderAgentId: 'leader-1', resultFile: path.join('x', 'agent-w1-result.md') })]));
   const stateFile = path.join(dir, 'state.json');
+  fs.mkdirSync(path.join(dir, 'x'));
+  fs.writeFileSync(path.join(dir, 'x', 'agent-w1-result.md'), 'previous result');
   // worker writes handoff intent
   execFileSync('node', [REQUEST, '--state', stateFile, '--from', 'w1', '--done', 'false', '--label', 'link2', '--remaining', 'finish parser', '--files', 'src/p.js'], { encoding: 'utf8' });
   // orchestrator routes
@@ -152,6 +154,49 @@ console.log('\n[5] router spawn-next (dry-run)');
   // idempotency: re-run skips the processed request.
   const again = JSON.parse(execFileSync('node', [ROUTER, '--state', stateFile, '--dry-run'], { encoding: 'utf8' }));
   check('re-run skips processed request', again.skipped === 1 && again.spawned.length === 0, JSON.stringify(again));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// ── 5b. router previous result fallback states ──────────────────────────────
+console.log('\n[5b] router prevResult fallback');
+{
+  const dir = mkOrch('fallback-out', baseState([agent('w1', 'running', { depth: 2, chainId: 'chain-w1', linkSeq: 1, leaderAgentId: 'L', resultFile: path.join('missing', 'agent-w1-result.md') })]));
+  const stateFile = path.join(dir, 'state.json');
+  const outJsonl = path.join(dir, 'agent-w1-out.jsonl');
+  fs.writeFileSync(outJsonl, '{"type":"message"}\n');
+  execFileSync('node', [REQUEST, '--state', stateFile, '--from', 'w1', '--done', 'false', '--label', 'l2', '--remaining', 'rest'], { encoding: 'utf8' });
+  execFileSync('node', [ROUTER, '--state', stateFile, '--dry-run'], { encoding: 'utf8' });
+  const st = loadState(stateFile);
+  const link2 = st.waves[1].agents[0];
+  const prompt = fs.readFileSync(path.join(dir, `agent-${link2.id}-prompt.md`), 'utf8');
+  check('missing result + existing out.jsonl → prompt points at out.jsonl', prompt.includes(outJsonl) && /Result file not written yet/.test(prompt), prompt);
+  check('missing result + existing out.jsonl → link records fallback pointer', link2.prevOutJsonl === outJsonl && link2.prevResultFileExists === false, JSON.stringify(link2));
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+{
+  const dir = mkOrch('fallback-result', baseState([agent('w1', 'running', { depth: 2, chainId: 'chain-w1', linkSeq: 1, leaderAgentId: 'L', resultFile: path.join('x', 'agent-w1-result.md') })]));
+  const stateFile = path.join(dir, 'state.json');
+  fs.mkdirSync(path.join(dir, 'x'));
+  fs.writeFileSync(path.join(dir, 'x', 'agent-w1-result.md'), 'previous result');
+  fs.writeFileSync(path.join(dir, 'agent-w1-out.jsonl'), '{"type":"message"}\n');
+  execFileSync('node', [REQUEST, '--state', stateFile, '--from', 'w1', '--done', 'false', '--label', 'l2', '--remaining', 'rest'], { encoding: 'utf8' });
+  execFileSync('node', [ROUTER, '--state', stateFile, '--dry-run'], { encoding: 'utf8' });
+  const st = loadState(stateFile);
+  const link2 = st.waves[1].agents[0];
+  const prompt = fs.readFileSync(path.join(dir, `agent-${link2.id}-prompt.md`), 'utf8');
+  check('existing result → prompt keeps result file', /agent-w1-result\.md/.test(prompt));
+  check('existing result → prompt does not mention out.jsonl fallback', !/out\.jsonl|Result file not written yet/.test(prompt), prompt);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+{
+  const dir = mkOrch('fallback-none', baseState([agent('w1', 'running', { depth: 2, chainId: 'chain-w1', linkSeq: 1, leaderAgentId: 'L', resultFile: path.join('missing', 'agent-w1-result.md') })]));
+  const stateFile = path.join(dir, 'state.json');
+  execFileSync('node', [REQUEST, '--state', stateFile, '--from', 'w1', '--done', 'false', '--label', 'l2', '--remaining', 'rest'], { encoding: 'utf8' });
+  execFileSync('node', [ROUTER, '--state', stateFile, '--dry-run'], { encoding: 'utf8' });
+  const st = loadState(stateFile);
+  const link2 = st.waves[1].agents[0];
+  const prompt = fs.readFileSync(path.join(dir, `agent-${link2.id}-prompt.md`), 'utf8');
+  check('missing result + missing out.jsonl → prompt uses default fallback', /\(no prior result file recorded/.test(prompt), prompt);
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
