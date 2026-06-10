@@ -3,7 +3,7 @@ title: 'Pane UX: empty PowerShell tab + human-readable agent output'
 description: >-
   Điều tra 2 câu hỏi UX của hệ pane orchestration: tab PowerShell trống có cần
   không; display agent output thân thiện cả máy lẫn người
-status: pending
+status: done
 priority: P2
 created: 2026-06-10T00:00:00.000Z
 ---
@@ -28,7 +28,7 @@ Hai câu hỏi UX từ user về hệ recursive pane orchestration (wmux):
 |-------|------|--------|
 | 1 | [Research (Leader-led investigation)](./phase-01-research-leader-led-investigation.md) | Completed |
 | 2 | [Synthesis and recommendation](./phase-02-synthesis-and-recommendation.md) | Completed |
-| 3 | [Implementation (conditional)](./phase-03-implementation-conditional.md) | Pending |
+| 3 | [Implementation (conditional)](./phase-03-implementation-conditional.md) | Completed |
 
 ## Key Artifacts
 
@@ -44,4 +44,4 @@ Hai câu hỏi UX từ user về hệ recursive pane orchestration (wmux):
 
 ## Phát hiện phụ (ngoài phạm vi, đã surface)
 
-**Orphan shell leak:** `close-surface`/`close-pane` gỡ UI nhưng KHÔNG giết shell `powershell -NoExit` nền (census: 10 shell mồ côi). Pre-existing, độc lập 2 câu UX. Chờ user quyết có điều tra riêng không.
+**Orphan shell leak:** `close-surface`/`close-pane` gỡ UI nhưng KHÔNG giết shell `powershell -NoExit` nền (census: 10 shell mồ côi). Pre-existing, độc lập 2 câu UX. **→ ĐÃ XỬ LÝ (WI-3, 2026-06-10):** user chốt fix ngay; Leader Opus điều tra + tạo `scripts/reap-orphan-shells.ps1` (identity-based qua env `WMUX_SURFACE_ID`, dry-run mặc định, 4 lớp khoá + fail-safe); reap 9 orphan/846MB, 0 live bị đụng. Chi tiết: `.orch-run/orphfix/agent-orch-root-c1-result.md` + phase-03.

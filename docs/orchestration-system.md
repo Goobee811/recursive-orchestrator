@@ -36,6 +36,7 @@ Các thành phần chính:
 - `codex` chạy headless bằng `codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check`.
 - Codex ghi structured output qua `-o agent-<id>-result.json` và JSONL forensic log qua `--json`.
 - Schema output nằm ở `scripts/codex-result-schema.json`.
+- Echo pane của codex được render compact ANSI (1 event → 1 dòng gọn: lệnh, kết quả, file change, result kèm decisions/remaining) thay vì JSONL thô; `out.jsonl` vẫn nhận byte thô nguyên vẹn — máy không đọc stdout pane. Renderer lỗi thì tự fallback echo thô; đặt env `WORKER_RAW_ECHO=1` để ép echo thô khi debug.
 
 Ví dụ:
 
@@ -332,17 +333,32 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/safe-launch-wrapper.
 
 ### `scripts/cleanup-panes.ps1`
 
-Script này đang được worker khác cùng wave viết. Quy ước vận hành dự kiến:
+Teardown một wave đã biết theo `state.json`: với từng agent đã đăng ký chạy `wmux agent kill` rồi `close-pane`. Chỉ gỡ UI qua wmux API, không kill OS process.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cleanup-panes.ps1 -State .orch-run/p7pack/state.json
 ```
 
-Mục đích: đọc `state.json`, đóng các pane/agent còn sót sau wave. Khi cần khẩn cấp có thể đóng thủ công:
+Khi cần khẩn cấp có thể đóng thủ công:
 
 ```powershell
 node $env:WMUX_CLI close-pane <paneId>
 ```
+
+### `scripts/reap-orphan-shells.ps1`
+
+Sweep toàn hệ giết shell `powershell -NoExit` mồ côi mà `close-surface`/`close-pane` để lại (~115MB/shell; chủ yếu là shell tab-trống vì harvest `agent kill` đã giết shell agent). Nhận diện identity-based: đọc env `WMUX_SURFACE_ID` của từng shell (P/Invoke PEB, x64) và đối chiếu live tree — không heuristic.
+
+```powershell
+# Dry-run (mặc định, không kill gì): liệt kê orphan + lý do phân loại
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1
+
+# Kill thật toàn bộ orphan / kill đúng 1 pid
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -Reap
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -TargetPid <pid>
+```
+
+An toàn: chỉ kill khi đủ CẢ 4 khoá (cmdline đúng chữ ký surface shell; parent là wmux electron; không thuộc chuỗi tổ tiên của chính script; `WMUX_SURFACE_ID` đọc được và không có trong live tree). Fail-safe exit 3 không kill gì khi không xác định được tập live tin cậy; `-TargetPid` vào pid không phải orphan bị REFUSED exit 2. Chống race lúc hệ đang spawn: orphan trẻ hơn `-MinOrphanAgeMin` (mặc định 2 phút) chỉ bị liệt kê YOUNG-SKIPPED, không kill (kể cả `-TargetPid`) — sẽ được quét ở lần chạy sau. Shell có env đọc được nhưng thiếu `WMUX_SURFACE_ID` xếp UNCERTAIN, không bao giờ kill. Yêu cầu PowerShell 64-bit (offset PEB x64; 32-bit bị từ chối exit 3). Lưu ý: giả định single-window (wmux 0.5.0) — re-validate trước khi dùng trên wmux multi-window.
 
 ## Quy ước layout pane
 
@@ -352,6 +368,7 @@ Quy ước trực quan của repo:
 - Sibling cùng wave: split ngang, pane mới nằm **bên dưới** sibling trước.
 - `process-nested-requests.js` spawn child đầu bằng vertical split từ parent/root pane; child tiếp theo dùng horizontal split từ pane child trước.
 - `chain-router.js` spawn link kế bằng vertical split từ pane link trước, fallback về root pane nếu pane trước đã bị harvest.
+- Pane worker chỉ còn **1 tab agent**: surface terminal mặc định do `split` tạo được đóng ngay sau khi agent spawn thành công (`closeSurfaceQuiet` trong `pane-spawn.js`; chỉ đóng SAU spawn vì pane tự huỷ khi mất surface cuối; đóng lỗi thì bỏ qua — tab trống còn lại vô hại).
 
 Patch wmux đã được dogfood verified ngày `2026-06-10`:
 
@@ -428,3 +445,5 @@ node $env:WMUX_CLI agent kill <wmuxAgentId>
 - `scripts/crash-recovery.js`: progress marker và stale detection.
 - `scripts/launch-agent-ext.js`: launcher `claude|opencode|codex`.
 - `scripts/safe-launch-wrapper.ps1`: safety wrapper opt-in.
+- `scripts/cleanup-panes.ps1`: teardown wave theo `state.json` (wmux API, không kill process).
+- `scripts/reap-orphan-shells.ps1`: reap orphan surface shell toàn hệ (dry-run mặc định, 4 lớp khoá, fail-safe).

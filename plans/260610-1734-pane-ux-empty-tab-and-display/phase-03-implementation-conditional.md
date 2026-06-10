@@ -1,8 +1,8 @@
 ---
 phase: 3
 title: "Implementation (conditional)"
-status: pending
-effort: ""
+status: done
+effort: "2 wave (paneux: 2 codex worker song song; orphfix: 1 Leader Opus) + dogfood + 2 code review"
 ---
 
 # Phase 3: Implementation (conditional)
@@ -44,8 +44,22 @@ Các work item CÓ ĐIỀU KIỆN — chỉ kích hoạt theo quyết định us
 
 ## Success Criteria
 
-- [ ] Các WI user chọn được implement qua worker + nghiệm thu độc lập (test 0 FAIL, verify live)
-- [ ] WI không được chọn: ghi nhận quyết định trong plan, đóng plan sạch
+- [x] Các WI user chọn được implement qua worker + nghiệm thu độc lập (test 0 FAIL, verify live)
+- [x] WI không được chọn: ghi nhận quyết định trong plan, đóng plan sạch (cả 3 WI đều ACTIVE — không có WI bị bỏ)
+
+## Kết Quả Thực Hiện (2026-06-10, vai trò Orchestrator — workers thực hiện)
+
+| WI | Actor | Kết quả | Bằng chứng |
+|----|-------|---------|-----------|
+| WI-1 close-surface tab trống | codex worker (wave paneux) | DONE — `allocateSplit` trả `{paneId, defaultSurfaceId}`, `closeSurfaceQuiet` gọi sau spawn thành công ở 3 caller; grid giữ nguyên | suite 214/0; dogfood live 3/3 pane chỉ 1 tab (cả engine codex lẫn claude) |
+| WI-2 render ANSI giàu | codex worker (wave paneux) | DONE — line-buffer qua chunk boundary, `createCodexRenderer` export, fallback echo thô khi renderer lỗi, `WORKER_RAW_ECHO=1` | test mới `test-codex-render.js` 16/0 (chunk-invariant 7/64/1000B + cắt giữa dòng); live codex exit 0; out.jsonl production 29/29 parse OK |
+| WI-3 orphan-shell leak | Leader Opus (wave orphfix) | DONE — tạo mới `scripts/reap-orphan-shells.ps1` (identity-based: đọc env `WMUX_SURFACE_ID` qua PEB; dry-run mặc định; `-Reap`/`-TargetPid`; 4 lớp khoá + fail-safe exit 3) | verify thang a→d live; census 11 shell/1021MB → 2/175MB (reap 9 orphan/846MB); negative test REFUSED orchestrator/self; dry-run độc lập từ orchestrator: 0 orphan còn lại |
+
+**Review (code-reviewer, advisory):** wave paneux APPROVE_WITH_NITS — 0 critical/high. Nits ghi nhận (không sửa, cosmetic/by-design): (1) `launch-agent-ext.js` thứ tự khai báo `C` trước `noColor` (an toàn call-time, dễ nhầm khi đọc); (2) flush phần dư buffer khi stream kết thúc in thô — ĐÚNG spec; (3) `input_tokens: 0` bị ẩn khỏi turn summary (display-only); (4) `test-codex-render.js` cần fixture local `.orch-run/chfix|agfix` — fail ENOENT trên fresh clone; (5) `|| ''` vs `?? null` cho surfaceId.
+
+**Review reaper: REQUEST_CHANGES → remediation wave orphfix2** (1 codex worker, zone 1 file): (H1) TOCTOU race — shell sinh giữa snapshot tree và census bị xếp orphan oan → vá bằng `-MinOrphanAgeMin` mặc định 2 phút (trẻ hơn = YOUNG-SKIPPED, TargetPid cũng REFUSED); (H2) env đọc được nhưng thiếu key `WMUX_SURFACE_ID` (sid rỗng) lọt nhánh ORPHAN — lệch design intent lock 4 → rỗng = UNCERTAIN không bao giờ kill; (M1) chặn 32-bit PowerShell ngay đầu (offset PEB chỉ đúng x64) → fail-safe exit 3. **✅ Remediation DONE + nghiệm thu**: ladder live đầy đủ (young REFUSED exit 2 → override `-MinOrphanAgeMin 0` mới kill được, live shells nguyên); orchestrator xác minh độc lập 3 marker trong file + chạy dry-run/`-Reap` cuối từ context riêng (reap orphan còn lại, hệ về 0 orphan, exit 0).
+
+**Insight vận hành mới (từ census WI-3):** harvest `agent kill` vốn ĐÃ giết shell agent; nguồn leak chính là shell tab-trống (không agent gắn). Sau WI-1, tab trống bị đóng ngay lúc spawn → shell của nó vẫn orphan (1/worker) → chạy `reap-orphan-shells.ps1` định kỳ (dry-run xem trước, `-Reap` dọn). Khuyến nghị tương lai của Leader: cân nhắc tích hợp vào `orchestrator-pass` nếu RAM thành vấn đề; PHẢI giữ 4 lớp khoá. Risk mở: giả định single-window của wmux 0.5.0 (re-validate khi wmux có multi-window).
 
 ## Risk Assessment
 
