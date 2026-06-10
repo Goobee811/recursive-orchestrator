@@ -201,15 +201,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/orchestrator-pass.ps
   -RootPane <paneId> `
   -Cwd "C:\Users\Bee\recursive-orchestrator" `
   -Chain `
-  -Mark `
-  -HarvestKill
+  -Mark
 ```
 
 Ghi chú:
 
 - `-Chain` mới bật bước chain-router.
 - `-Mark` cho phép crash-recovery mark failed, nhưng chỉ khi có wmux live list.
-- `-HarvestKill` reap pane đã có result.
+- `-HarvestKill` (opt-in legacy, KHÔNG nằm trong ví dụ mặc định): reap pane đã có result. Mặc định KHÔNG truyền — pane sống đến khi user tự đóng bằng `close-pane-with-log.js` (xem § Theo dõi và đóng pane thủ công).
 - `-RootPane` nên truyền tường minh vì `WMUX_PANE_ID` có thể rỗng sau resume.
 
 ### `scripts/spawn-by-split.js`
@@ -351,12 +350,14 @@ Sweep toàn hệ giết shell `powershell -NoExit` mồ côi mà `close-surface`
 
 ```powershell
 # Dry-run (mặc định, không kill gì): liệt kê orphan + lý do phân loại
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -OrchestratorPane <paneId>
 
 # Kill thật toàn bộ orphan / kill đúng 1 pid
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -Reap
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -TargetPid <pid>
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -OrchestratorPane <paneId> -Reap
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/reap-orphan-shells.ps1 -OrchestratorPane <paneId> -TargetPid <pid>
 ```
+
+`-OrchestratorPane <paneId>` là BẮT BUỘC thực tế (thay hardcode cũ — pane orchestrator đổi mỗi resume): truyền paneId hiện hành lấy từ `wmux tree`; thiếu/sai -> fail-safe exit 3 không kill gì. JSON summary có `shells: [{pid, sid, reason}]` (map pid↔surfaceId cho mọi candidate — `close-pane-with-log.js` dùng để resolve pid) và `toctouSkippedPids` (pid bị skip do re-check signature+CreationDate ngay trước Stop-Process phát hiện lệch — chống pid-reuse).
 
 An toàn: chỉ kill khi đủ CẢ 4 khoá (cmdline đúng chữ ký surface shell; parent là wmux electron; không thuộc chuỗi tổ tiên của chính script; `WMUX_SURFACE_ID` đọc được và không có trong live tree). Fail-safe exit 3 không kill gì khi không xác định được tập live tin cậy; `-TargetPid` vào pid không phải orphan bị REFUSED exit 2. Chống race lúc hệ đang spawn: orphan trẻ hơn `-MinOrphanAgeMin` (mặc định 2 phút) chỉ bị liệt kê YOUNG-SKIPPED, không kill (kể cả `-TargetPid`) — sẽ được quét ở lần chạy sau. Shell có env đọc được nhưng thiếu `WMUX_SURFACE_ID` xếp UNCERTAIN, không bao giờ kill. Yêu cầu PowerShell 64-bit (offset PEB x64; 32-bit bị từ chối exit 3). Lưu ý: giả định single-window (wmux 0.5.0) — re-validate trước khi dùng trên wmux multi-window.
 
@@ -394,9 +395,52 @@ Luồng đúng:
 - `harvest-results.js` đọc status trong JSON.
 - `done` hoặc `partial` => agent `completed`.
 - `blocked` => agent `failed`.
-- `orchestrator-pass.ps1 -HarvestKill` gọi harvest và reap pane idle.
+- **Mặc định pane SỐNG sau completed** — harvest chỉ mark trạng thái từ result, KHÔNG đóng pane. User tự đóng từng pane bằng `close-pane-with-log.js` (lưu log rồi kill). `orchestrator-pass.ps1 -HarvestKill` là opt-in legacy nếu muốn reap pane tự động như trước.
 
 Với Claude/opencode, harvest coi `agent-<id>-result.md` tồn tại và non-empty là completed.
+
+## Theo dõi và đóng pane thủ công
+
+Mặc định hệ KHÔNG tự đóng pane worker (quyết định 2026-06-10: đóng tay hoàn toàn). Hai công cụ đi kèm:
+
+### `scripts/watch-agent.js` — theo dõi agent real-time
+
+Tail forensics đĩa của agent đang chạy (không phụ thuộc scrollback — `read-screen` chưa hoạt động ở wmux 0.5.0):
+
+```powershell
+node scripts/watch-agent.js <agentId|paneId>            # replay từ đầu rồi follow real-time
+node scripts/watch-agent.js <agentId> --once            # render hết file hiện có rồi thoát
+node scripts/watch-agent.js <agentId> --state <path>    # chỉ định run khi agentId trùng giữa nhiều .orch-run/*
+```
+
+- Codex worker: tail `agent-<id>-out.jsonl`, render compact qua `createCodexRenderer`; offset theo BYTE, tự xử lý file bị truncate khi respawn.
+- Leader/worker claude: đọc `claudeSessionId` từ state.json (được ghi lúc spawn qua cờ `claude --session-id <uuid>`) -> tail transcript `~/.claude/projects/<slug>/<uuid>.jsonl` render compact. Thiếu field -> lỗi hướng dẫn rõ, không đoán.
+- agentId trùng nhiều run: watch tự chọn state mtime mới nhất kèm cảnh báo; truyền `--state` để chỉ định.
+- Mọi output qua bộ lọc control-char (strip C0/C1/CSI/OSC) — output worker là untrusted.
+
+### `scripts/close-pane-with-log.js` — đóng pane kèm lưu log
+
+Đóng 1 pane worker: render forensics -> lưu snapshot -> kill shell thu hồi RAM (~115MB/shell) -> close pane. **Dry-run mặc định**, chỉ phá huỷ khi `--confirm`:
+
+```powershell
+node scripts/close-pane-with-log.js <agentId|paneId>             # dry-run: in kế hoạch + ghi snapshot
+node scripts/close-pane-with-log.js <agentId|paneId> --confirm   # agent-kill -> close-pane -> kill shell (verify JSON killed[])
+```
+
+- Snapshot lưu tại `.orch-run/<wave>/closed-pane-<agentId>-<ts>.md` (đã sanitize control-char + redact secret qua scan-secrets).
+- Agent còn `running|pending` -> REFUSE (đóng sẽ mất result + kẹt slot); `--force` chỉ in lệnh mark state mẫu, KHÔNG tự sửa state.
+- Kill shell qua `reap-orphan-shells.ps1 -TargetPid <pid> -MinOrphanAgeMin 0 -OrchestratorPane <pane-live>` — giữ trọn 4 khoá nhận diện; xác nhận kill bằng JSON `killed[]`, KHÔNG tin exit code; fail -> in lệnh khắc phục + exit non-zero.
+- Constraint: chạy TRONG pane wmux (gate electron-ancestry) + PowerShell 64-bit; giả định single-window (wmux 0.5.0).
+
+### Phân vai 3 công cụ đóng pane
+
+| Công cụ | Vai trò | Log forensics? |
+|---------|---------|----------------|
+| `close-pane-with-log.js` | đóng LẺ có log (MẶC ĐỊNH) | Có (snapshot `.md`) |
+| `cleanup-panes.ps1` | dọn KHẨN khi state hỏng (đóng hàng loạt) | KHÔNG — cảnh báo MẤT forensics |
+| `-HarvestKill` (orchestrate-start / orchestrator-pass) | legacy opt-in reap tự động | Không |
+
+**KHÔNG có reaper sweep tự động** trong luồng mặc định — không caller nào tự chạy `reap-orphan-shells.ps1`; khi cần dọn orphan tồn đọng, user chạy sweep TAY (dry-run trước, `-Reap` sau).
 
 ## Lệnh dọn khẩn
 
@@ -446,4 +490,7 @@ node $env:WMUX_CLI agent kill <wmuxAgentId>
 - `scripts/launch-agent-ext.js`: launcher `claude|opencode|codex`.
 - `scripts/safe-launch-wrapper.ps1`: safety wrapper opt-in.
 - `scripts/cleanup-panes.ps1`: teardown wave theo `state.json` (wmux API, không kill process).
-- `scripts/reap-orphan-shells.ps1`: reap orphan surface shell toàn hệ (dry-run mặc định, 4 lớp khoá, fail-safe).
+- `scripts/reap-orphan-shells.ps1`: reap orphan surface shell toàn hệ (dry-run mặc định, 4 lớp khoá, fail-safe; `-OrchestratorPane` bắt buộc, JSON `shells[]` + TOCTOU re-check).
+- `scripts/orch-forensics-map.js`: resolver agentId/paneId -> forensics paths (scan `.orch-run/*/state.json`, disambiguation đa-run, `sanitizeControl`).
+- `scripts/watch-agent.js`: theo dõi agent real-time qua forensics đĩa (codex out.jsonl + claude transcript).
+- `scripts/close-pane-with-log.js`: đóng pane thủ công — lưu snapshot log rồi kill shell (dry-run mặc định).

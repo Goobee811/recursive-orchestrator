@@ -13,3 +13,6 @@ wmux-orch-*/
 tmp/
 .DS_Store
 Thumbs.db
+
+# Claude session artifacts (subagent memory, task locks)
+.claude/
