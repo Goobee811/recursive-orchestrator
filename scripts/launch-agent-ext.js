@@ -10,35 +10,46 @@
 //        for local runs / opencode selection.
 //   3. default `claude`.
 //
-// claude/opencode branches are byte-for-byte the upstream behaviour (interactive
-// TUI via execFileSync + '--' separator). Codex runs headless: structured output
-// via --output-schema/-o plus a tee'd --json JSONL log for forensics (H7: codex
-// only writes -o as the last message and may die before it does).
+// claude/opencode branches keep the upstream interactive TUI shape via
+// execFileSync + '--' separator. Codex runs headless: structured output via
+// --output-schema/-o plus a tee'd --json JSONL log for forensics because codex
+// only writes -o as the last message and may die before it does.
 //
-// Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex]
+// Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex] [--model id] [--effort low|medium|high|xhigh|max]
 
 const { execFileSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// --- arg parse: first positional = prompt file, --engine <name> optional ---
+const USAGE = 'Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex] [--model id] [--effort low|medium|high|xhigh|max]';
+const DEFAULT_CLAUDE_MODEL = 'claude-opus-4-8[1m]';
+const DEFAULT_CLAUDE_EFFORT = 'max';
+
+// --- arg parse: first positional = prompt file, optional flags after ---
 const argv = process.argv.slice(2);
 let promptFile = null;
 let engineFlag = null;
+let modelFlag = null;
+let effortFlag = null;
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--engine') {
     engineFlag = (argv[++i] || '').toLowerCase();
+  } else if (argv[i] === '--model') {
+    modelFlag = argv[++i] || '';
+  } else if (argv[i] === '--effort') {
+    effortFlag = argv[++i] || '';
   } else if (!promptFile) {
     promptFile = argv[i];
   }
 }
 
 if (!promptFile) {
-  console.error('Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex]');
+  console.error(USAGE);
   process.exit(1);
 }
 if (!fs.existsSync(promptFile)) {
   console.error(`Prompt file not found: ${promptFile}`);
+  console.error(USAGE);
   process.exit(1);
 }
 
@@ -64,8 +75,13 @@ if (engine === 'codex') {
   // --dangerously-skip-permissions: auto-approve all tools (interactive mode)
   // '--' stops Commander.js variadic flags from consuming the prompt
   // NOTE: do NOT use --bare — it skips keychain/OAuth and causes "Not logged in"
+  // Claude agents are Leaders in this system, so the strongest model/effort
+  // defaults live here and benefit every spawn path without threading flags.
+  const model = modelFlag || DEFAULT_CLAUDE_MODEL;
+  const effort = effortFlag || DEFAULT_CLAUDE_EFFORT;
+  const args = ['--dangerously-skip-permissions', '--model', model, '--effort', effort, '--', prompt];
   try {
-    execFileSync('claude', ['--dangerously-skip-permissions', '--', prompt], { stdio: 'inherit' });
+    execFileSync('claude', args, { stdio: 'inherit' });
   } catch (e) {
     process.exit(e.status || 1);
   }
@@ -89,7 +105,7 @@ function runCodex(promptText, promptFilePath) {
 
   const args = [
     'exec',
-    '--dangerously-bypass-approvals-and-sandbox', // full bypass (user-chosen; safety layers in Phase 6)
+    '--dangerously-bypass-approvals-and-sandbox', // full bypass (user-chosen; guarded by safety layers)
     '--skip-git-repo-check',                       // worker cwd may be non-git
     '-C', cwd,
     '-o', resultFile,                              // last agent message (schema-shaped JSON)
