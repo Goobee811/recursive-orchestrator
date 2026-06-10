@@ -1,11 +1,13 @@
 ---
 phase: 7
 title: "E2E Test + Default Mode Packaging"
-status: pending
+status: done-fixture-scope
 priority: P2
 effort: "3-5h"
 dependencies: [4, 5, 6]
 ---
+
+> **Kết quả 2026-06-10 (fixture scope DONE):** Đợt 1 — worker codex viết `scripts/orchestrate-start.ps1` (daemon: hash-guard patch wmux, pass loop, stop-early) + `scripts/cleanup-panes.ps1` + `docs/orchestration-system.md` (430 dòng). Đợt 2 — E2E 1 lượt qua **Leader Opus 4.8 live** (`.orch-run/p7e2e/agent-lead-p7e2e-result.md`): Ca A nested (WA xin sub depth-3 qua nested-request, SUB_OK), Ca B chain (linkSeq 1→2, reverse-relay marker `leaderAgentId=lead-p7e2e` đúng), Ca C Leader đọc 3 codex `-o` aggregate. Daemon 47 pass stop-early `{liveAgents:0,pendingRequests:0}`; cleanup-panes live 5 kill/5 close/0 err; guard deny live 9>8; 0 pane mồ côi. **Finding:** (1) link handoff-only exit nhanh → `prevResultFile` có thể trỏ file chưa ghi, link sau phải fallback `out.jsonl` (đã xảy ra, L2 tự xử lý OK — cân nhắc explicit fallback trong chain-router, chờ user quyết); (2) codex "model at capacity" SAU handoff làm session treo không ghi `-o` → worker kẹt `running`, orchestrator đóng tay qua cleanup-panes + mark state (đường xử lý đã dùng thật). **CÒN LẠI:** success criteria "1 task BASF thật" — chờ user chọn task.
 
 # Phase 7: E2E Test + Default Mode Packaging
 
@@ -51,10 +53,10 @@ Packaging: orchestrate-start.ps1 (gọi plugin /orchestrate + bật delta) + cle
 
 ## Success Criteria
 
-- [ ] 3 ca delta chạy trọn vẹn; 0 pane mồ côi; an toàn bật.
-- [ ] 1 task BASF thật chạy qua hệ thống, file đích khớp report.
-- [ ] `docs/orchestration-system.md` + memory cập nhật khớp thực tế; có lệnh dọn khẩn.
-- [ ] Entrypoint dùng lại plugin, không tạo launcher thừa.
+- [x] 3 ca delta chạy trọn vẹn; 0 pane mồ côi; an toàn bật. *(2026-06-10: A nested depth-3 + B chain reverse-relay + C codex `-o`; safe-wrapper mọi spawn; guard deny live 9>8)*
+- [ ] 1 task BASF thật chạy qua hệ thống, file đích khớp report. *(chờ user chọn task)*
+- [x] `docs/orchestration-system.md` + memory cập nhật khớp thực tế; có lệnh dọn khẩn. *(cleanup-panes.ps1 verified live: 5 kill/5 close/0 err)*
+- [x] Entrypoint dùng lại plugin, không tạo launcher thừa. *(orchestrate-start.ps1 = vòng lặp quanh orchestrator-pass.ps1, stop-early 47 pass)*
 
 ## Risk Assessment
 

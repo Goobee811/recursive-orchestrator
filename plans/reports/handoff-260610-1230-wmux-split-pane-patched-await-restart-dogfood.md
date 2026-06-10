@@ -11,6 +11,8 @@ plan: plans/260609-1722-recursive-pane-orchestration
 
 Hướng (A) hoàn tất trên FILE: wmux đã vá `split --pane` (CLI + renderer asar, verify độc lập + smoke PASS), pipeline forward `--pane` (commit `1d8c06d`), launcher mặc định Leader Opus 4.8 1M max (commit `70a263e`). Sự cố giữa phiên: user tắt nóng wmux (Leader chết — crash-recovery mark failed ĐÚNG thiết kế) + update wmux đè mất patch lần 1 → worker `w1b` vá lại thành công trên bản mới. **Renderer RAM đang chạy = bản CHƯA vá → bước còn lại duy nhất: user restart wmux → dogfood vị trí pane (§7).**
 
+> **Cập nhật 2026-06-10 12:55 (orchestrator phiên resume #1):** hash app.asar còn `CED7F271...` + cli `DE120E49...` ✅ (update KHÔNG đè). Test CLI `split --pane` trực tiếp: pane mới vẫn đáp first-leaf → XÁC NHẬN renderer RAM chưa vá (wmux process start 11:58 < patch write 12:21). Pane test đã đóng sạch, cây về 1 leaf. **Chờ user restart wmux — sau restart phiên mới chỉ cần: kiểm hash → test CLI split --pane → nếu pane đáp đúng cạnh target thì đi thẳng dogfood qua hệ (§7 bước 2b).**
+
 | Trường | Giá trị |
 |--------|---------|
 | Ngày | 2026-06-10 12:30 |
