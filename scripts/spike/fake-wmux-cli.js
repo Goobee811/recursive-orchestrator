@@ -32,11 +32,16 @@ function maybeFailSplit() {
   const n = nextId('split');
   const failAt = parseInt(process.env.FAKE_WMUX_FAIL_SPLIT_AT || '0', 10);
   if (failAt === n) {
-    record({ command: 'split', direction: argv.includes('--down') ? 'horizontal' : 'vertical', failed: true, splitIndex: n });
+    record({ command: 'split', direction: argv.includes('--down') ? 'horizontal' : 'vertical', pane: splitPaneArg(), failed: true, splitIndex: n });
     process.stderr.write(`fake split failed at ${n}`);
     process.exit(1);
   }
   return n;
+}
+
+function splitPaneArg() {
+  const pi = argv.indexOf('--pane');
+  return pi !== -1 ? argv[pi + 1] || '' : '';
 }
 
 if (argv[0] === 'focus-pane') {
@@ -48,7 +53,7 @@ if (argv[0] === 'focus-pane') {
 if (argv[0] === 'split') {
   const splitIndex = maybeFailSplit();
   const paneId = `pane-fake-${splitIndex}`;
-  record({ command: 'split', direction: argv.includes('--down') ? 'horizontal' : 'vertical', paneId, splitIndex });
+  record({ command: 'split', direction: argv.includes('--down') ? 'horizontal' : 'vertical', pane: splitPaneArg(), paneId, splitIndex });
   process.stdout.write(JSON.stringify({ paneId }) + '\n');
   process.exit(0);
 }

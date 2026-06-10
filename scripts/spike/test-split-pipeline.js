@@ -59,6 +59,7 @@ console.log('\n[1] nested wave split directions');
   check('3 children spawned', out.processed[0].children.filter((c) => !c.error).length === 3, JSON.stringify(out));
   check('split vertical then horizontal/horizontal', splits.map((e) => e.direction).join(',') === 'vertical,horizontal,horizontal', JSON.stringify(splits));
   check('sources follow parent then previous child panes', focuses.join(',') === 'pane-parent,pane-fake-1,pane-fake-2', JSON.stringify(focuses));
+  check('split --pane follows parent then previous child panes', splits.map((e) => e.pane).join(',') === 'pane-parent,pane-fake-1,pane-fake-2', JSON.stringify(splits));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
@@ -74,6 +75,7 @@ console.log('\n[2] chain next-link split from from-link pane');
   const focus = entries.find((e) => e.command === 'focus-pane');
   check('chain spawned next link', out.spawned.length === 1 && !out.spawned[0].nextLink.error, JSON.stringify(out));
   check('chain split vertical from from pane', split && split.direction === 'vertical' && focus && focus.paneId === 'pane-from', JSON.stringify(entries));
+  check('chain split forwards --pane from from pane', split && split.pane === 'pane-from', JSON.stringify(entries));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

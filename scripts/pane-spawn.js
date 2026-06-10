@@ -56,6 +56,7 @@ function allocateSplit(wmuxCli, sourcePane, direction) {
   if (sourcePane) execFileSync('node', [wmuxCli, 'focus-pane', sourcePane], { encoding: 'utf8' });
   const args = [wmuxCli, 'split'];
   if (direction === 'horizontal') args.push('--down');
+  if (sourcePane) args.push('--pane', sourcePane);
   const out = execFileSync('node', args, { encoding: 'utf8' });
   const parsed = JSON.parse(out);
   if (!parsed.paneId) throw new Error(`split returned no paneId: ${out}`);
