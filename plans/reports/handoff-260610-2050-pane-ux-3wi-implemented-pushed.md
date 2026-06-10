@@ -2,14 +2,14 @@
 title: "Handoff — 3 WI pane-UX implement xong qua workers/leader, nghiệm thu đủ, đã push; còn BASF task chờ user"
 date: 2026-06-10
 type: report
-tags: [handoff, orchestrator, pane-ux, close-surface, codex-render, orphan-reaper, recursive-pane-orchestration]
+tags: [handoff, orchestrator, pane-ux, close-surface, codex-render, orphan-reaper, manual-pane-close, scrollback-monitor, ck-plan-next, recursive-pane-orchestration]
 status: done
 plan: plans/260610-1734-pane-ux-empty-tab-and-display
 ---
 
-# Handoff — Pane UX: 3 WI đã implement + push; plan đóng
+# Handoff — Pane UX: 3 WI đã implement + push; cụm nâng cao chờ /ck:plan
 
-Phiên này (vai trò ORCHESTRATOR — không tự code) điều phối 3 wave + 1 dogfood + 2 code-review + 1 remediation, implement trọn 3 WI pane-UX user đã chốt — plan `260610-1734` ĐÓNG 3/3 phase. Suite 7/7 xanh trước push; **đã push `104c294..fcac6ef` (24 commit) lên origin/main**. Hệ wmux sạch (1 pane orchestrator, 0 orphan); việc còn lại duy nhất là BASF task chờ user.
+Phiên này (vai trò ORCHESTRATOR — không tự code) điều phối 3 wave + 1 dogfood + 2 code-review + 1 remediation, implement trọn 3 WI pane-UX — plan `260610-1734` ĐÓNG 3/3 phase, đã push `104c294..fcac6ef` (24 commit, suite 7/7 xanh), hệ wmux sạch. **Việc phiên sau (user chốt): Orchestrator chạy `/ck:plan` cho cụm "Pane UX nâng cao" — §8 đóng pane thủ công kèm lưu-log-rồi-kill + §9 theo dõi scrollback agent — RỒI mới cook qua worker.** Ngoài ra BASF task (Phase 7 plan nền) vẫn chờ user giao đề.
 
 | Trường | Giá trị |
 |--------|---------|
@@ -82,7 +82,7 @@ Phiên này (vai trò ORCHESTRATOR — không tự code) điều phối 3 wave +
 | Ưu tiên | Hành động | Phụ thuộc |
 |---------|-----------|-----------|
 | 0 | Đầu phiên: kiểm hash app.asar = `CED7F271…`; `wmux tree` lấy pane orchestrator mới | — |
-| 1 | **[user chốt 21:17] Xây skill "đóng pane thủ công kèm lưu log + kill shell" (chi tiết §8)** — plan riêng → cook qua worker như phiên này | hash OK |
+| 1 | **[user chốt 21:36] Orchestrator chạy `/ck:plan` cho CỤM "Pane UX nâng cao" = §8 (đóng pane thủ công) + §9 (theo dõi scrollback)** TRƯỚC khi cook — công việc đã nhiều chi tiết, cần plan có phase rõ rồi mới phân worker | hash OK |
 | 2 | (Chờ user) BASF task thật — đóng criterion cuối Phase 7 plan nền; spawn qua wave như phiên này | user giao đề |
 | 3 | Trong lúc chưa có skill §8: dùng `reap-orphan-shells.ps1` dry-run rồi `-Reap` để dọn orphan thủ công | — |
 
@@ -117,3 +117,24 @@ Phiên này (vai trò ORCHESTRATOR — không tự code) điều phối 3 wave +
 - Vẫn dính rủi ro multi-window (§4) khi xác định live/pid — giữ guard reaper.
 - KHÔNG sửa renderer (app.asar) — toàn bộ thuần CLI + script ngoài, tránh vùng patch.
 - Skill mới NÊN là plan riêng (`/ck:plan` → cook qua worker), không nhồi vào plan pane-ux đã đóng.
+
+## 9. Hướng kế tiếp user chốt (21:36): Theo dõi chủ động nội dung agent qua scrollback pane
+
+**Ý tưởng user:** chủ động đọc nội dung leader/worker đang làm trực tiếp trong pane bằng scrollback, để giám sát công việc real-time (công việc ngày càng nhiều chi tiết).
+
+**Khả thi đã verify (phiên này scout trực tiếp — phân biệt 2 nghĩa, KHỎI scout lại):**
+
+| Cách | Trạng thái | Cơ chế / bằng chứng |
+|------|-----------|---------------------|
+| Cuộn pane xem bằng MẮT | ✅ đã có ngay | Pane là terminal có scrollback buffer UI; WI-2 render compact ANSI → cuộn lên đọc được lịch sử gọn. Không cần build gì |
+| Trích xuất scrollback bằng LỆNH (`read-screen`) | ❌ chưa chạy wmux 0.5.0 | `wmux read-screen` → `{"text":"","note":"Screen reading requires renderer-side xterm serializer"}`; thêm nữa `surface.read_text` chỉ nhận `{lines}`, KHÔNG `surfaceId` → chỉ đọc surface đang focus (2 lớp rào). Phụ thuộc wmux implement serializer — ngoài tầm repo |
+| Tail forensics đĩa real-time (workaround chính) | ✅ codex | `out.jsonl` ghi liên tục (`out.write(chunk)` mỗi chunk); phiên này quan sát 0→138KB lúc worker chạy. Tail + render qua `createCodexRenderer` (WI-2) = theo dõi real-time bằng máy, không cần scrollback native. `Monitor` tool hoặc surface phụ tail-render |
+| Theo dõi claude LEADER real-time | ⚠️ khó hơn | Leader chạy TUI, KHÔNG ghi `out.jsonl`; chỉ có transcript `~/.claude/projects/<session>`; cần map session→leader (qua `CLAUDE_CODE_SESSION_ID` env như `context-meter.js` đã làm) |
+
+**Định hướng cho `/ck:plan` (ưu tiên 1):** gộp §8 + §9 thành cụm "Pane UX nâng cao", phân phase:
+- Phase A — theo dõi (§9): lệnh/skill `watch <agentId|paneId>` tail `out.jsonl` render real-time (codex); cân nhắc surface phụ markdown hoặc Monitor; xử lý leader qua transcript.
+- Phase B — đóng pane thủ công (§8): skill render-log-rồi-kill + bỏ `-HarvestKill`.
+- Điều tra chung: wmux keybinding (config.toml) cho cả 2 (bind phím watch / phím close).
+- Ràng buộc chung: KHÔNG sửa renderer app.asar; giữ guard reaper khi map pid; rủi ro multi-window (§4).
+
+**Vì sao cần `/ck:plan` (user nhận định):** 2 ý tưởng (§8+§9) + điều tra keybinding + workaround forensics + phân biệt codex/leader = nhiều chi tiết đan xen → cần plan có phase + research rõ TRƯỚC khi phân worker, tránh cook mò.
