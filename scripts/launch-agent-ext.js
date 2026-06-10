@@ -1,14 +1,10 @@
 #!/usr/bin/env node
 // Fork of the plugin launcher. Adds Codex beside claude/opencode.
-// Engine order: --engine flag, WMUX_AGENT_CMD, then claude.
-// Codex keeps raw JSONL for forensics but renders compact pane output.
-// Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex] [--model id] [--effort low|medium|high|xhigh|max]
-
 const { execFileSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const USAGE = 'Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex] [--model id] [--effort low|medium|high|xhigh|max]';
+const USAGE = 'Usage: node launch-agent-ext.js <prompt-file> [--engine claude|opencode|codex] [--model id] [--effort low|medium|high|xhigh|max] [--session-id uuid]';
 const DEFAULT_CLAUDE_MODEL = 'claude-opus-4-8[1m]';
 const DEFAULT_CLAUDE_EFFORT = 'max';
 
@@ -16,27 +12,22 @@ if (require.main === module) main();
 
 function main() {
   const argv = process.argv.slice(2);
-  let promptFile = null, engineFlag = null, modelFlag = null, effortFlag = null;
+  let promptFile = null, engineFlag = null, modelFlag = null, effortFlag = null, sessionId = null;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--engine') engineFlag = (argv[++i] || '').toLowerCase();
     else if (argv[i] === '--model') modelFlag = argv[++i] || '';
     else if (argv[i] === '--effort') effortFlag = argv[++i] || '';
+    else if (argv[i] === '--session-id') sessionId = argv[++i] || '';
     else if (!promptFile) promptFile = argv[i];
   }
-  if (!promptFile) {
-    console.error(USAGE);
-    process.exit(1);
-  }
+  if (!promptFile) { console.error(USAGE); process.exit(1); }
   if (!fs.existsSync(promptFile)) {
     console.error(`Prompt file not found: ${promptFile}`);
     console.error(USAGE);
     process.exit(1);
   }
   const prompt = fs.readFileSync(promptFile, 'utf8');
-  if (!prompt.trim()) {
-    console.error(`Prompt file is empty: ${promptFile}`);
-    process.exit(1);
-  }
+  if (!prompt.trim()) { console.error(`Prompt file is empty: ${promptFile}`); process.exit(1); }
   const engine = engineFlag || (process.env.WMUX_AGENT_CMD || 'claude').toLowerCase();
 
   if (engine === 'codex') {
@@ -48,7 +39,12 @@ function main() {
   } else {
     const model = modelFlag || DEFAULT_CLAUDE_MODEL;
     const effort = effortFlag || DEFAULT_CLAUDE_EFFORT;
-    const args = ['--dangerously-skip-permissions', '--model', model, '--effort', effort, '--', prompt];
+    const args = ['--dangerously-skip-permissions', '--model', model, '--effort', effort];
+    if (sessionId) {
+      if (!/^[0-9a-fA-F-]{8,}$/.test(sessionId)) { console.error(`Invalid --session-id: ${sessionId}`); process.exit(2); }
+      args.push('--session-id', sessionId);
+    }
+    args.push('--', prompt);
     try {
       execFileSync('claude', args, { stdio: 'inherit' });
     } catch (e) { process.exit(e.status || 1); }

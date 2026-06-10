@@ -31,6 +31,7 @@ param(
   [Parameter(Mandatory = $true)][string]$Launcher,
   [Parameter(Mandatory = $true)][string]$PromptFile,
   [string]$Engine = 'claude',
+  [string]$SessionId = '',
   [string]$StateFile = '',
   [string]$AgentId = '',
   [string]$ScriptsDir = '',
@@ -146,6 +147,10 @@ if ($GitCheckpoint) {
 # ── 4. launch ─────────────────────────────────────────────────────────────────
 Log "launch: node $Launcher $PromptFile (engine=$Engine)"
 if ($Engine -and $Engine -ne 'claude') { & node $Launcher $PromptFile --engine $Engine }
+elseif ($SessionId) {
+  if ($SessionId -notmatch '^[0-9a-fA-F-]{8,}$') { Abort 2 "invalid SessionId: $SessionId" }
+  & node $Launcher $PromptFile --session-id $SessionId
+}
 else { & node $Launcher $PromptFile }
 $launchExit = $LASTEXITCODE
 

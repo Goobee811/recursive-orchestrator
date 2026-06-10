@@ -129,6 +129,34 @@ console.log('\n[4] request → process (dry-run) registers tree');
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
+// ── 4b. Batch id allocation skips existing and same-batch ids ───────────────
+console.log('\n[4b] request → process (dry-run) dedupes child ids within batch');
+{
+  const dir = mkOrch('batch-dedupe', baseState([
+    agent('orch-root', 'running', { depth: 1 }),
+    agent('orch-root-c1', 'completed', { depth: 2 }),
+    agent('orch-root-c2', 'completed', { depth: 2 }),
+    agent('orch-root-c3', 'completed', { depth: 2 }),
+  ]));
+  const stateFile = path.join(dir, 'state.json');
+  const tasksFile = path.join(dir, 'tasks.json');
+  fs.writeFileSync(tasksFile, JSON.stringify([
+    { label: 'child four', subtask: 'do 4' },
+    { label: 'child five', subtask: 'do 5' },
+    { label: 'child six', subtask: 'do 6' },
+  ]));
+
+  execFileSync('node', [REQUEST, '--state', stateFile, '--parent', 'orch-root', '--tasks', tasksFile, '--cwd', '/tmp/work'], { encoding: 'utf8' });
+  const procOut = JSON.parse(execFileSync('node', [PROCESS, '--state', stateFile, '--dry-run'], { encoding: 'utf8' }));
+  check('processed batch request', procOut.processed.length === 1 && procOut.processed[0].status === 'dry-run', JSON.stringify(procOut.processed));
+
+  const kids = loadState(stateFile).waves[1].agents;
+  const ids = kids.map((k) => k.id);
+  check('3 child ids are distinct c4/c5/c6', ids.join(',') === 'orch-root-c4,orch-root-c5,orch-root-c6' && new Set(ids).size === 3, JSON.stringify(ids));
+
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
 // ── 5. process denies an over-limit request (authoritative re-check) ────────
 console.log('\n[5] processor authoritative deny');
 {

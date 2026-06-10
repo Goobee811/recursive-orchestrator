@@ -28,6 +28,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { loadState, withState, findAgent, isValidAgentId } = require('./nested-state');
 const { allocateSplit, closeSurfaceQuiet, spawnIntoPane } = require('./pane-spawn');
 
@@ -61,8 +62,9 @@ function main() {
   const promptFile = getFlag('--prompt', path.join(orchDir, `agent-${agentId}-prompt.md`));
   if (!fs.existsSync(promptFile)) { process.stderr.write(`spawn-by-split: prompt file not found: ${promptFile}\n`); process.exit(1); }
   const cwd = getFlag('--cwd', agent.cwd || process.cwd());
-  const engine = agent.engine || 'claude';
+  const engine = String(agent.engine || 'claude').toLowerCase();
   const label = agent.label || agentId;
+  const claudeSessionId = engine === 'claude' ? crypto.randomUUID() : '';
 
   // 1. Allocate the pane with the directional split.
   const horizontal = splitMode === 'horizontal' || splitMode === 'sibling';
@@ -73,7 +75,7 @@ function main() {
   try {
     spawnRes = spawnIntoPane(wmuxCli, paneId, {
       launcher, promptFile, engine, label, cwd,
-      safeWrapper, stateFile, agentId,
+      safeWrapper, stateFile, agentId, sessionId: claudeSessionId,
     });
   } catch (e) {
     withState(stateFile, (s) => { const f = findAgent(s, agentId); if (f) { f.agent.status = 'failed'; f.agent.exitCode = -1; } });
@@ -90,6 +92,7 @@ function main() {
       f.agent.paneId = paneId;
       f.agent.surfaceId = spawnRes.surfaceId;
       f.agent.wmuxAgentId = spawnRes.agentId;
+      if (claudeSessionId) f.agent.claudeSessionId = claudeSessionId;
       f.agent.status = 'running';
       f.agent.startedAt = now;
     }

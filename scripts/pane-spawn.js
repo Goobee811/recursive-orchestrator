@@ -25,8 +25,9 @@ const fwd = (p) => String(p).replace(/\\/g, '/');
 // wrapper reads the worker's allowed file set from state.json by agent id, so stateFile
 // + agentId travel with it. engine/agentId are slug-constrained here so neither can
 // inject extra tokens into the command (callers already normalize them; this is depth).
-function buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, agentId }) {
+function buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, agentId, sessionId }) {
   const safeEngine = /^[a-z]+$/i.test(engine || '') ? engine : 'claude';
+  const safeSessionId = safeEngine === 'claude' && /^[0-9a-fA-F-]{8,}$/.test(sessionId || '') ? sessionId : '';
   if (safeWrapper) {
     const q = (p) => `"${fwd(p)}"`;
     let cmd = `powershell -NoProfile -ExecutionPolicy Bypass -File ${q(safeWrapper)}`
@@ -34,10 +35,12 @@ function buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, 
       + ` -ScriptsDir ${q(path.dirname(safeWrapper))}`;
     if (stateFile) cmd += ` -StateFile ${q(stateFile)}`;
     if (agentId && /^[A-Za-z0-9._-]+$/.test(agentId)) cmd += ` -AgentId ${agentId}`;
+    if (safeSessionId) cmd += ` -SessionId ${safeSessionId}`;
     return cmd;
   }
   const engineArg = safeEngine && safeEngine !== 'claude' ? ` --engine ${safeEngine}` : '';
-  return `node "${fwd(launcher)}" "${fwd(promptFile)}"${engineArg}`;
+  const sessionArg = safeSessionId ? ` --session-id ${safeSessionId}` : '';
+  return `node "${fwd(launcher)}" "${fwd(promptFile)}"${engineArg}${sessionArg}`;
 }
 
 // Ask wmux for a balanced grid big enough for `workerCount` new panes PLUS the
@@ -76,8 +79,8 @@ function closeSurfaceQuiet(wmuxCli, surfaceId) {
 // because `wmux agent spawn` cannot pass env vars to the pane process (so the engine
 // can't ride WMUX_AGENT_CMD here). Returns wmux's { agentId, surfaceId } — agentId is
 // what reconcile-agents.js later matches against `wmux agent list`.
-function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, cwd, safeWrapper, stateFile, agentId }) {
-  const cmd = buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, agentId });
+function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, cwd, safeWrapper, stateFile, agentId, sessionId }) {
+  const cmd = buildLaunchCmd({ launcher, promptFile, engine, safeWrapper, stateFile, agentId, sessionId });
   const out = execFileSync('node', [
     wmuxCli, 'agent', 'spawn',
     '--pane', paneId,

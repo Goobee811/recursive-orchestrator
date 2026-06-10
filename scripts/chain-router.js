@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { loadState, withState, findAgent, addNestedWave, countActive, ENGINES, isValidAgentId } = require('./nested-state');
 const { allocateGrid, allocateSplit, closeSurfaceQuiet, spawnIntoPane, fwd } = require('./pane-spawn');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
@@ -284,15 +285,16 @@ function routeOne(requestFile, opts) {
       spawnInfo.error = 'no pane allocated';
     } else {
       try {
+        const claudeSessionId = link.engine === 'claude' ? crypto.randomUUID() : '';
         const { agentId, surfaceId } = spawnIntoPane(opts.wmuxCli, paneId, {
           launcher: opts.launcher, promptFile: link.promptFile, engine: link.engine, label: link.label, cwd: ctx.cwd,
-          safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: link.id,
+          safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: link.id, sessionId: claudeSessionId,
         });
         closeSurfaceQuiet(opts.wmuxCli, allocation.defaultSurfaceId);
         const now = new Date().toISOString();
         withState(opts.stateFile, (state) => {
           const f = findAgent(state, link.id);
-          if (f) { f.agent.paneId = paneId; f.agent.surfaceId = surfaceId; f.agent.wmuxAgentId = agentId; f.agent.status = 'running'; f.agent.startedAt = now; }
+          if (f) { f.agent.paneId = paneId; f.agent.surfaceId = surfaceId; f.agent.wmuxAgentId = agentId; if (claudeSessionId) f.agent.claudeSessionId = claudeSessionId; f.agent.status = 'running'; f.agent.startedAt = now; }
         });
         spawnInfo = { ...spawnInfo, paneId, agentId, surfaceId, split: allocation.split, sourcePane: allocation.sourcePane };
       } catch (e) {

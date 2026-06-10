@@ -124,9 +124,11 @@ function agentDepth(state, id, _seen) {
   return 1; // top-level wave agent spawned directly by the orchestrator
 }
 
-// Build a child agent id that is unique within the current state.
-function makeChildId(state, parentId, ordinal) {
+// Build a child agent id that is unique within the current state and any ids
+// already allocated by the caller before they are persisted.
+function makeChildId(state, parentId, ordinal, extraTaken) {
   const taken = new Set(listAgents(state).map(({ agent }) => agent.id));
+  if (extraTaken) for (const id of extraTaken) taken.add(id);
   let id = `${parentId}-c${ordinal}`;
   let n = ordinal;
   while (taken.has(id)) id = `${parentId}-c${++n}`;

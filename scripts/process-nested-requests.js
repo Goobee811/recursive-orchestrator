@@ -23,6 +23,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { loadState, withState, findAgent, makeChildId, addNestedWave, ENGINES, isValidAgentId } = require('./nested-state');
 const { evaluateGuard } = require('./nested-guard');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
@@ -142,8 +143,10 @@ function processOne(requestFile, opts) {
     scriptsDir: __dirname, stateFile: opts.stateFile, launcher: opts.launcher,
   };
   const { children, waveIndex } = withState(opts.stateFile, (state) => {
+    const allocatedIds = new Set();
     const kids = subTasks.map((t, i) => {
-      const id = makeChildId(state, parentId, i + 1);
+      const id = makeChildId(state, parentId, i + 1, allocatedIds);
+      allocatedIds.add(id);
       return {
         id, label: t.label, subtask: t.subtask, files: t.files || [], excludeFiles: t.excludeFiles || [],
         engine: normalizeEngine(t.engine), parentAgentId: parentId, depth: verdict.childDepth,
@@ -187,15 +190,16 @@ function processOne(requestFile, opts) {
       }
       const paneId = allocation.paneId;
       if (!paneId) { spawned.push({ id: child.id, error: allocation.error || 'no pane allocated', split: allocation.split, sourcePane: allocation.sourcePane }); return; }
+      const claudeSessionId = child.engine === 'claude' ? crypto.randomUUID() : '';
       try {
         const { agentId, surfaceId } = spawnIntoPane(opts.wmuxCli, paneId, {
           launcher: ctx.launcher, promptFile: child.promptFile, engine: child.engine, label: child.label, cwd: ctx.cwd,
-          safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: child.id,
+          safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: child.id, sessionId: claudeSessionId,
         });
         closeSurfaceQuiet(opts.wmuxCli, allocation.defaultSurfaceId);
         lastGoodPane = paneId;
         spawned.push({ id: child.id, paneId, agentId, surfaceId, label: child.label, engine: child.engine, resultFile: child.resultFile,
-          split: allocation.split, sourcePane: allocation.sourcePane });
+          split: allocation.split, sourcePane: allocation.sourcePane, claudeSessionId });
       } catch (e) {
         spawned.push({ id: child.id, paneId, error: e.message, split: allocation.split, sourcePane: allocation.sourcePane });
       }
@@ -207,7 +211,14 @@ function processOne(requestFile, opts) {
         const found = findAgent(state, s.id);
         if (!found) continue;
         if (s.error) { found.agent.status = 'failed'; found.agent.exitCode = -1; }
-        else { found.agent.paneId = s.paneId; found.agent.surfaceId = s.surfaceId; found.agent.wmuxAgentId = s.agentId; found.agent.status = 'running'; found.agent.startedAt = now; }
+        else {
+          found.agent.paneId = s.paneId;
+          found.agent.surfaceId = s.surfaceId;
+          found.agent.wmuxAgentId = s.agentId;
+          if (s.claudeSessionId) found.agent.claudeSessionId = s.claudeSessionId;
+          found.agent.status = 'running';
+          found.agent.startedAt = now;
+        }
       }
     });
   } else {
