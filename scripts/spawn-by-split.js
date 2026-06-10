@@ -29,7 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadState, withState, findAgent, isValidAgentId } = require('./nested-state');
-const { allocateSplit, spawnIntoPane } = require('./pane-spawn');
+const { allocateSplit, closeSurfaceQuiet, spawnIntoPane } = require('./pane-spawn');
 
 function getFlag(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -66,7 +66,7 @@ function main() {
 
   // 1. Allocate the pane with the directional split.
   const horizontal = splitMode === 'horizontal' || splitMode === 'sibling';
-  const paneId = allocateSplit(wmuxCli, sourcePane, horizontal ? 'horizontal' : 'vertical');
+  const { paneId, defaultSurfaceId } = allocateSplit(wmuxCli, sourcePane, horizontal ? 'horizontal' : 'vertical');
 
   // 2. Spawn into it through the SAME path process-nested/chain-router use.
   let spawnRes;
@@ -80,6 +80,7 @@ function main() {
     process.stderr.write(`spawn-by-split: spawn failed (${e.message})\n`);
     process.exit(1);
   }
+  closeSurfaceQuiet(wmuxCli, defaultSurfaceId);
 
   // 3. Reflect the running worker into state (same fields reconcile keys on).
   const now = new Date().toISOString();

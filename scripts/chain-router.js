@@ -26,7 +26,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadState, withState, findAgent, addNestedWave, countActive, ENGINES, isValidAgentId } = require('./nested-state');
-const { allocateGrid, allocateSplit, spawnIntoPane, fwd } = require('./pane-spawn');
+const { allocateGrid, allocateSplit, closeSurfaceQuiet, spawnIntoPane, fwd } = require('./pane-spawn');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
 const { fence } = require('./data-fence');
 
@@ -225,7 +225,7 @@ function allocateContinuationPane(opts, fromPane) {
     // harvest-results can kill the completed from-link pane before chain-router runs,
     // so prefer the exact chain pane but fall back to the orchestrator/root pane.
     for (const sourcePane of [fromPane, opts.rootPane].filter(Boolean)) {
-      try { return { paneId: allocateSplit(opts.wmuxCli, sourcePane, 'vertical'), split: 'vertical', sourcePane }; }
+      try { return { ...allocateSplit(opts.wmuxCli, sourcePane, 'vertical'), split: 'vertical', sourcePane }; }
       catch (e) { process.stderr.write(`chain-router: split from ${sourcePane} failed (${e.message})\n`); }
     }
   }
@@ -288,6 +288,7 @@ function routeOne(requestFile, opts) {
           launcher: opts.launcher, promptFile: link.promptFile, engine: link.engine, label: link.label, cwd: ctx.cwd,
           safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: link.id,
         });
+        closeSurfaceQuiet(opts.wmuxCli, allocation.defaultSurfaceId);
         const now = new Date().toISOString();
         withState(opts.stateFile, (state) => {
           const f = findAgent(state, link.id);

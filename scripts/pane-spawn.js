@@ -60,7 +60,16 @@ function allocateSplit(wmuxCli, sourcePane, direction) {
   const out = execFileSync('node', args, { encoding: 'utf8' });
   const parsed = JSON.parse(out);
   if (!parsed.paneId) throw new Error(`split returned no paneId: ${out}`);
-  return parsed.paneId;
+  return { paneId: parsed.paneId, defaultSurfaceId: parsed.surfaceId || '' };
+}
+
+function closeSurfaceQuiet(wmuxCli, surfaceId) {
+  if (!surfaceId) return;
+  try {
+    execFileSync('node', [wmuxCli, 'close-surface', surfaceId], { encoding: 'utf8' });
+  } catch (_) {
+    // Best effort only: a stale empty tab is preferable to failing a worker spawn.
+  }
 }
 
 // Launch one agent into an existing pane. `engine` travels inside the --cmd string
@@ -80,4 +89,4 @@ function spawnIntoPane(wmuxCli, paneId, { launcher, promptFile, engine, label, c
   return { agentId: parsed.agentId, surfaceId: parsed.surfaceId };
 }
 
-module.exports = { allocateGrid, allocateSplit, spawnIntoPane, buildLaunchCmd, fwd };
+module.exports = { allocateGrid, allocateSplit, closeSurfaceQuiet, spawnIntoPane, buildLaunchCmd, fwd };

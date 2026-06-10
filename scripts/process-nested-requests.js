@@ -26,7 +26,7 @@ const path = require('path');
 const { loadState, withState, findAgent, makeChildId, addNestedWave, ENGINES, isValidAgentId } = require('./nested-state');
 const { evaluateGuard } = require('./nested-guard');
 const { reconcile, fetchLiveAgents } = require('./reconcile-agents');
-const { allocateGrid, allocateSplit, spawnIntoPane, fwd } = require('./pane-spawn');
+const { allocateGrid, allocateSplit, closeSurfaceQuiet, spawnIntoPane, fwd } = require('./pane-spawn');
 const { fence } = require('./data-fence');
 
 const normalizeEngine = (e) => {
@@ -179,7 +179,7 @@ function processOne(requestFile, opts) {
         allocation = { paneId: gridPaneIds[i] };
       } else {
         allocation = { split: i === 0 ? 'vertical' : 'horizontal', sourcePane: lastGoodPane || splitRootPane };
-        try { allocation.paneId = allocateSplit(opts.wmuxCli, allocation.sourcePane, allocation.split); }
+        try { Object.assign(allocation, allocateSplit(opts.wmuxCli, allocation.sourcePane, allocation.split)); }
         catch (e) {
           process.stderr.write(`process-nested-requests: split failed for ${child.id} (${e.message})\n`);
           allocation.error = 'no pane allocated';
@@ -192,6 +192,7 @@ function processOne(requestFile, opts) {
           launcher: ctx.launcher, promptFile: child.promptFile, engine: child.engine, label: child.label, cwd: ctx.cwd,
           safeWrapper: opts.safeWrapper, stateFile: opts.stateFile, agentId: child.id,
         });
+        closeSurfaceQuiet(opts.wmuxCli, allocation.defaultSurfaceId);
         lastGoodPane = paneId;
         spawned.push({ id: child.id, paneId, agentId, surfaceId, label: child.label, engine: child.engine, resultFile: child.resultFile,
           split: allocation.split, sourcePane: allocation.sourcePane });

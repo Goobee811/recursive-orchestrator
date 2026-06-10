@@ -8,7 +8,7 @@ const logFile = process.env.FAKE_WMUX_LOG || '';
 const counterFile = logFile ? `${logFile}.counter` : '';
 
 function readCounter() {
-  if (!counterFile || !fs.existsSync(counterFile)) return { pane: 0, agent: 0, split: 0 };
+  if (!counterFile || !fs.existsSync(counterFile)) return { pane: 0, agent: 0, split: 0, close: 0 };
   return JSON.parse(fs.readFileSync(counterFile, 'utf8'));
 }
 
@@ -53,8 +53,9 @@ if (argv[0] === 'focus-pane') {
 if (argv[0] === 'split') {
   const splitIndex = maybeFailSplit();
   const paneId = `pane-fake-${splitIndex}`;
-  record({ command: 'split', direction: argv.includes('--down') ? 'horizontal' : 'vertical', pane: splitPaneArg(), paneId, splitIndex });
-  process.stdout.write(JSON.stringify({ paneId }) + '\n');
+  const surfaceId = `surf-fake-${splitIndex}`;
+  record({ command: 'split', direction: argv.includes('--down') ? 'horizontal' : 'vertical', pane: splitPaneArg(), paneId, surfaceId, splitIndex });
+  process.stdout.write(JSON.stringify({ paneId, surfaceId }) + '\n');
   process.exit(0);
 }
 
@@ -72,8 +73,29 @@ if (argv[0] === 'agent' && argv[1] === 'spawn') {
   const pane = argv[argv.indexOf('--pane') + 1] || '';
   const agentId = `wmux-agent-${nextId('agent')}`;
   const surfaceId = `surface-${agentId}`;
+  const failAt = parseInt(process.env.FAKE_WMUX_FAIL_AGENT_SPAWN_AT || '0', 10);
+  const agentIndex = parseInt(agentId.replace('wmux-agent-', ''), 10);
+  if (failAt === agentIndex) {
+    record({ command: 'agent-spawn', pane, agentId, surfaceId, failed: true });
+    process.stderr.write(`fake agent spawn failed at ${agentIndex}`);
+    process.exit(1);
+  }
   record({ command: 'agent-spawn', pane, agentId, surfaceId });
   process.stdout.write(JSON.stringify({ agentId, surfaceId }) + '\n');
+  process.exit(0);
+}
+
+if (argv[0] === 'close-surface') {
+  const closeIndex = nextId('close');
+  const surfaceId = argv[1] || '';
+  const failAt = parseInt(process.env.FAKE_WMUX_FAIL_CLOSE_SURFACE_AT || '0', 10);
+  const failed = failAt === closeIndex;
+  record({ command: 'close-surface', surfaceId, failed, closeIndex });
+  if (failed) {
+    process.stderr.write(`fake close-surface failed at ${closeIndex}`);
+    process.exit(1);
+  }
+  process.stdout.write(JSON.stringify({ ok: true }) + '\n');
   process.exit(0);
 }
 
