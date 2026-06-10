@@ -47,6 +47,7 @@ param(
   [switch]$Reap,
   [int]$TargetPid = 0,
   [int]$MinOrphanAgeMin = 2,
+  [string]$OrchestratorPane = '',
   [string]$WmuxCli = "C:\Users\Bee\wmux\resources\cli\wmux.js"
 )
 
@@ -66,7 +67,7 @@ if (-not [Environment]::Is64BitProcess) {
 
 # The orchestrator owns this pane; it must always stay alive. Its presence in the
 # live tree is also used as a sanity gate (a tree without it is treated as stale).
-$OrchestratorPaneId = "pane-fdc4920d-7803-4db3-9197-1bb48d83e8de"
+$OrchestratorPaneId = $OrchestratorPane
 
 # Substring unique to a wmux surface shell's command line (live and orphan share it).
 # Transient tool/wrapper shells use a different invocation and never match this.
@@ -143,7 +144,7 @@ function Get-LiveSurfaceIds {
   $surfaces = New-Object System.Collections.Generic.List[string]
   $panes = New-Object System.Collections.Generic.List[string]
   $stack = New-Object System.Collections.Stack
-  if ($parsed.tree) { $stack.Push($parsed.tree) }
+  if ($parsed.tree) { $stack.Push($parsed.tree) } else { $stack.Push($parsed) }
   while ($stack.Count -gt 0) {
     $node = $stack.Pop()
     if ($node.type -eq 'leaf') {
@@ -193,7 +194,7 @@ foreach ($c in $candidates) {
   $ageTotalMin = ($now - $c.CreationDate).TotalMinutes
   $ageMin = [math]::Round($ageTotalMin, 0)
   $ramMb = [math]::Round($c.WorkingSetSize / 1MB, 0)
-  $rec = [pscustomobject]@{ Pid = $cpid; Ppid = [int]$c.ParentProcessId; AgeMin = $ageMin; RamMb = $ramMb; Sid = $sid; Reason = "" }
+  $rec = [pscustomobject]@{ Pid = $cpid; Ppid = [int]$c.ParentProcessId; AgeMin = $ageMin; RamMb = $ramMb; Sid = $sid; Reason = ""; CreationDate = $c.CreationDate }
 
   if ($ancestors.ContainsKey($cpid)) {
     $rec.Reason = "EXCLUDE: own ancestor chain"; $excluded += $rec
@@ -285,8 +286,16 @@ else {
 # --- Execute kills ----------------------------------------------------------------
 $killed = @()
 $failed = @()
+$toctouSkippedPids = @()
 foreach ($k in $toKill) {
   try {
+    $scanRec = $orphans | Where-Object { $_.Pid -eq $k } | Select-Object -First 1
+    $latest = Get-CimInstance Win32_Process -Filter "ProcessId=$k"
+    if ((-not $latest) -or (-not $latest.CommandLine) -or (-not $latest.CommandLine.Contains($SurfaceSignature)) -or ($latest.CreationDate -ne $scanRec.CreationDate)) {
+      $toctouSkippedPids += [int]$k
+      Write-Output ("  SKIPPED pid {0}: TOCTOU process changed or vanished before kill" -f $k)
+      continue
+    }
     Stop-Process -Id $k -Force -Confirm:$false -ErrorAction Stop
     $killed += $k
     Write-Output ("  killed pid {0}" -f $k)
@@ -301,6 +310,7 @@ $summary = [ordered]@{
   electronPid    = $electronPid
   liveSurfaces   = $liveSurfaces
   liveSetReliable = $liveSetReliable
+  shells         = @(($excluded + $uncertain + $youngSkipped + $orphans) | ForEach-Object { [pscustomobject]@{ pid = [int]$_.Pid; sid = [string]$_.Sid; reason = [string]$_.Reason } })
   orphanCount    = $orphans.Count
   orphanRamMb    = [int]$orphanRam
   orphanPids     = $orphanPids
@@ -309,6 +319,7 @@ $summary = [ordered]@{
   uncertainPids  = @($uncertain | ForEach-Object { $_.Pid })
   killed         = $killed
   failed         = $failed
+  toctouSkippedPids = $toctouSkippedPids
 }
 Write-Output ""
 Write-Output ("JSON " + ($summary | ConvertTo-Json -Compress))
