@@ -53,8 +53,9 @@ Phiên này (vai trò ORCHESTRATOR — không tự code) điều phối 3 wave +
 | Vấn đề | Ảnh hưởng | Ghi chú |
 |--------|-----------|---------|
 | BASF task thật — criterion CUỐI Phase 7 plan nền `260609-1722` | plan nền chưa đóng được | chờ user giao đề bài |
-| Auto-reap tích hợp `orchestrator-pass`? | RAM tích luỹ 1 orphan/worker nếu không quét | Leader khuyến nghị GIỮ TAY (KISS); chỉ tự động nếu RAM thành vấn đề; phải giữ 4 lớp khoá |
-| wmux multi-window tương lai: `system.tree` trả toàn bộ hay chỉ window active? | reaper có thể xếp nhầm surface window khác = orphan | re-validate trước khi dùng reaper trên wmux multi-window (wmux 0.5.0 hiện single-window — an toàn) |
+| ~~Auto-reap tích hợp `orchestrator-pass`?~~ | — | **SUPERSEDED** bởi hướng §8 (user chốt đóng tay hoàn toàn — không auto-close, không auto-reap; mỗi pane do user tự đóng qua skill kèm kill shell) |
+| wmux multi-window tương lai: `system.tree` trả toàn bộ hay chỉ window active? | reaper/skill có thể xếp nhầm surface window khác = orphan | re-validate trước khi dùng trên wmux multi-window (wmux 0.5.0 hiện single-window — an toàn); áp dụng cả cho skill §8 |
+| [§8] wmux config.toml có map được keybinding → shell command không? | quyết định skill đóng pane bấm được phím tắt hay chỉ gõ lệnh | CHƯA verify — `config.toml` hiện trống, `capabilities` không liệt kê keybindings; phiên sau điều tra (đọc app.asar / thử config) |
 | Codex capacity stall: c2 wave paneux treo ~9 phút mới stream | wave chậm, không hỏng | tự hồi phục; pattern đã biết, không cần can thiệp nếu out.jsonl còn 0 byte < ~10 phút |
 
 ## 5. File Tham Chiếu (đọc THEO THỨ TỰ)
@@ -81,6 +82,38 @@ Phiên này (vai trò ORCHESTRATOR — không tự code) điều phối 3 wave +
 | Ưu tiên | Hành động | Phụ thuộc |
 |---------|-----------|-----------|
 | 0 | Đầu phiên: kiểm hash app.asar = `CED7F271…`; `wmux tree` lấy pane orchestrator mới | — |
-| 1 | (Chờ user) BASF task thật — đóng criterion cuối Phase 7 plan nền; spawn qua wave như phiên này | user giao đề |
-| 2 | Định kỳ/sau mỗi wave: `reap-orphan-shells.ps1` dry-run xem rồi `-Reap` | — |
-| 3 | (Nếu user muốn) quyết auto-reap trong `orchestrator-pass` | quyết định ở §4 |
+| 1 | **[user chốt 21:17] Xây skill "đóng pane thủ công kèm lưu log + kill shell" (chi tiết §8)** — plan riêng → cook qua worker như phiên này | hash OK |
+| 2 | (Chờ user) BASF task thật — đóng criterion cuối Phase 7 plan nền; spawn qua wave như phiên này | user giao đề |
+| 3 | Trong lúc chưa có skill §8: dùng `reap-orphan-shells.ps1` dry-run rồi `-Reap` để dọn orphan thủ công | — |
+
+## 8. Hướng kế tiếp user chốt (21:17): Đóng pane thủ công = skill "lưu log rồi kill shell"
+
+**Ý tưởng user:** bỏ auto-close pane; mọi pane worker sống đến khi user TỰ đóng; thao tác đóng đồng thời (a) cho user đọc lại lịch sử làm việc chi tiết của pane, (b) kill shell nền để không ngốn RAM. Mục tiêu kép: vừa xem được forensics trước khi đóng, vừa thu hồi RAM ngay.
+
+**Quyết định user (2026-06-10 21:17):**
+- **Kích hoạt:** lệnh/skill chủ động + **điều tra thêm phím tắt** (map `config.toml` keybinding → command nếu wmux hỗ trợ).
+- **Auto-close:** **đóng tay HOÀN TOÀN** — bỏ hẳn `-HarvestKill` close-pane khỏi luồng mặc định.
+
+**Khả thi đã verify (phiên này scout trực tiếp, phiên sau KHỎI scout lại):**
+
+| Trụ | Trạng thái | Cơ chế / bằng chứng |
+|-----|-----------|---------------------|
+| Để pane sống, không auto-close | ✅ | Bỏ cờ `-HarvestKill` ở `orchestrator-pass.ps1`/`orchestrate-start.ps1`. Harvest result-based VẪN mark agent completed từ đĩa; chỉ KHÔNG close-pane. Lifecycle đọc result không phụ thuộc pane (đã ver…ied phiên trước) |
+| Kill shell theo pane khi đóng | ✅ | Tái dùng logic `reap-orphan-shells.ps1`: paneId → `list-surfaces` lấy surfaceId → đọc env `WMUX_SURFACE_ID` qua PEB tìm pid → `Stop-Process`. Target 1 pane rõ ràng → an toàn hơn sweep; vẫn giữ guard (parent==electron, không đụng orchestrator/own-chain) |
+| Đọc lịch sử chi tiết shell | ⚠️ KHÔNG qua `read-screen` | `wmux read-screen` (surface.read_text) **CHƯA chạy** ở wmux 0.5.0 — trả `{"text":"","note":"Screen reading requires renderer-side xterm serializer"}`. **Thay bằng forensics đĩa** (tốt hơn, không bị cuộn mất): codex worker có `out.jsonl` đầy đủ + `agent-<id>-result.md/json`; claude worker có transcript `~/.claude/projects/...`. Render bằng renderer compact đã có (WI-2 `createCodexRenderer` trong `launch-agent-ext.js` — TÁI DÙNG) |
+| Hook nút X gốc của UI | ❌ | wmux KHÔNG có event subscription/lifecycle hook: `capabilities` = `[workspaces, splits, notifications]`; CLI request-response 1 chiều; lệnh `hook` là PUSH event vào (cho indicator), không phải listen. → KHÔNG thể auto-chạy skill khi click X. Thay bằng skill chủ động (user gõ lệnh/phím tắt THAY click X) |
+| Phím tắt → command | ❓ CHƯA verify | `config.toml` hiện trống, `capabilities` không liệt kê keybindings. Phiên sau điều tra: wmux config có map `keybindings`/`bind` → chạy shell command không? Nếu CÓ → bind 1 phím (vd Ctrl+Shift+W) → skill. Nếu KHÔNG → fallback: user gõ lệnh (vẫn đạt mục tiêu, kém tiện hơn) |
+
+**Thiết kế skill đề xuất (phiên sau tinh chỉnh):**
+1. Input: paneId (tham số tường minh, HOẶC tự lấy từ `$env:WMUX_PANE_ID`/`WMUX_SURFACE_ID` nếu chạy từ trong pane đó).
+2. paneId → `list-surfaces` → surfaceId(s) của pane.
+3. Tìm forensics tương ứng pane/agent (tra `state.json` các wave: surfaceId/paneId → agentId → `out.jsonl`+result). Render lịch sử compact (tái dùng `createCodexRenderer`) → in ra pane đang đóng + LƯU snapshot `.md` vào `.orch-run/<wave>/closed-pane-<agentId>-<ts>.md` (timestamp truyền vào, KHÔNG `Date.now()` trong workflow script).
+4. Kill shell: surfaceId → pid (PEB) → `Stop-Process`, qua đủ guard của reaper (parent==electron, loại trừ orchestrator + own ancestor chain).
+5. `close-pane <paneId>`.
+6. Dry-run/confirm mode: liệt kê sẽ render + kill gì trước khi làm thật.
+
+**Ràng buộc / rủi ro mang sang:**
+- Bỏ `-HarvestKill` mặc định = pane tích luỹ nếu user quên đóng → RAM lên. Chấp nhận theo lựa chọn "đóng tay hoàn toàn"; skill là công cụ thu hồi.
+- Vẫn dính rủi ro multi-window (§4) khi xác định live/pid — giữ guard reaper.
+- KHÔNG sửa renderer (app.asar) — toàn bộ thuần CLI + script ngoài, tránh vùng patch.
+- Skill mới NÊN là plan riêng (`/ck:plan` → cook qua worker), không nhồi vào plan pane-ux đã đóng.
