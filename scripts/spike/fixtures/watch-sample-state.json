@@ -1,0 +1,15 @@
+{
+  "waves": [
+    {
+      "agents": [
+        {
+          "id": "watch-w1",
+          "paneId": "pane-watch-w1",
+          "surfaceId": "surface-watch-w1",
+          "engine": "codex",
+          "resultFile": "agent-watch-w1-result.json"
+        }
+      ]
+    }
+  ]
+}

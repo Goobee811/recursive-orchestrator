@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"fixture-thread"}
+{"type":"item.started","item":{"type":"command_execution","command":"powershell -Command \"Write-Output hello\""}}
+{"type":"item.completed","item":{"type":"command_execution","exit_code":0,"aggregated_output":"hello"}}
+{"type":"item.completed","item":{"type":"agent_message","text":"{\"status\":\"done\",\"filesChanged\":[\"scripts/watch-agent.js\"],\"decisions\":[\"fixture ok\"],\"remaining\":[]}"}}
