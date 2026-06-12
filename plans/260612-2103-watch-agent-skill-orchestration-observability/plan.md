@@ -1,7 +1,7 @@
 ---
 title: "Skill /watch-agent - quan sat nhanh orchestration sessions"
 description: "Skill project-local /watch-agent [target]: từ repo này nhìn nhanh mọi orchestration session (repo bất kỳ) — ai phân công gì, leader/worker đang nghĩ/làm gì; kèm helper scripts/orch-status.js"
-status: in-progress
+status: completed
 priority: P2
 created: 2026-06-12
 ---
@@ -32,11 +32,11 @@ Mode: fast (task nhỏ, rõ, chỉ chạm repo này + `.claude/skills/` local). 
 |-------|------|--------|
 | 1 | [Helper script orch-status](./phase-01-helper-script-orch-status.md) | Done |
 | 2 | [Skill watch-agent SKILL.md](./phase-02-skill-watch-agent-skill-md.md) | Done |
-| 3 | [E2E validation va docs](./phase-03-e2e-validation-va-docs.md) | Done (chờ gate 2-phiên) |
+| 3 | [E2E validation va docs](./phase-03-e2e-validation-va-docs.md) | Done |
 
 ## Cook Log — 2026-06-12
 
-Cook xong 3 phase (mode code; orchestrator Opus 4.8). **Plan giữ in-progress** theo DoD Validation S1 Q4 — chỉ chuyển `completed` khi phiên SAU gõ `/watch-agent` thật, catalog nạp skill thành công.
+Cook xong 3 phase (mode code; orchestrator Opus 4.8). **Plan COMPLETED.** DoD Q4 (gate `/watch-agent` thật) đã đóng NGAY phiên cook: skill nạp vào catalog mid-session (harness re-scan khi tạo file — premise Q4 "catalog chỉ nạp đầu phiên" đổi), `/watch-agent gantt-sync` chạy end-to-end thành công (resolve xuyên repo + tường thuật đúng template). User duyệt đóng plan.
 
 | Hạng mục | Kết quả |
 |----------|---------|

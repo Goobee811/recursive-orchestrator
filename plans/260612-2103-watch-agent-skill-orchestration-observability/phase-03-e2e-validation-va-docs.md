@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "E2E validation va docs"
-status: done-pending-2session-gate
+status: done
 priority: P2
 effort: "30-45m"
 dependencies: [1, 2]
@@ -50,11 +50,11 @@ Kịch bản nghiệm thu:
 
 ## Success Criteria
 
-- [ ] 5 kịch bản PASS, có output mẫu trong báo cáo
-- [ ] docs cập nhật, <800 dòng (baseline 594)
-- [ ] Full suite PASS; working tree chỉ chứa thay đổi của plan
-- [ ] Commit sạch, không AI reference
-- [ ] (Gate phiên SAU — Validation S1 Q4) Phiên mới gõ `/watch-agent` thật thành công → lúc đó mới chuyển plan completed
+- [x] 5 kịch bản PASS, có output mẫu trong báo cáo
+- [x] docs cập nhật, <800 dòng (baseline 594 → 613)
+- [x] Full suite PASS (10/10); working tree chỉ chứa thay đổi của plan
+- [x] Commit sạch, không AI reference (`d94dba9` feat + `d2aa50d` docs)
+- [x] (Gate Q4) `/watch-agent gantt-sync` thật thành công NGAY phiên cook — skill đã nạp catalog mid-session; resolve xuyên repo + tường thuật đúng template → gate đóng, plan completed
 
 ## Risk Assessment
 
