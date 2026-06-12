@@ -165,21 +165,24 @@ function processOne(requestFile, opts) {
   }
 
   // 3. Spawn (unless dry-run). Default split layout mirrors the orchestration tree;
-  //    grid stays available as the rollback path and for missing split anchors.
+  //    grid is only used when explicitly requested.
   const spawned = [];
   if (!opts.dryRun) {
     let gridPaneIds = [];
     const splitRootPane = opts.layout === 'split' ? (parentPane(opts.stateFile, parentId) || opts.rootPane || '') : '';
-    const useGrid = opts.layout === 'grid' || !splitRootPane;
+    const useGrid = opts.layout === 'grid';
     if (useGrid) {
       try { gridPaneIds = allocateGrid(opts.wmuxCli, children.length); }
       catch (e) { process.stderr.write(`process-nested-requests: layout grid failed (${e.message})\n`); }
     }
+    const missingSplitSource = opts.layout === 'split' && !splitRootPane;
     let lastGoodPane = '';
     children.forEach((child, i) => {
       let allocation = {};
       if (useGrid) {
         allocation = { paneId: gridPaneIds[i] };
+      } else if (missingSplitSource) {
+        allocation = { error: 'no source pane for split layout; pass --root-pane or use --layout grid' };
       } else {
         allocation = { split: i === 0 ? 'vertical' : 'horizontal', sourcePane: lastGoodPane || splitRootPane };
         try { Object.assign(allocation, allocateSplit(opts.wmuxCli, allocation.sourcePane, allocation.split)); }

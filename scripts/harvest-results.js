@@ -37,6 +37,11 @@ function getFlag(name, fallback) {
 }
 const hasFlag = (name) => process.argv.includes(name);
 
+function resolveResultPath(orchDir, resultFile) {
+  if (!resultFile) return '';
+  return path.isAbsolute(resultFile) ? resultFile : path.join(orchDir, resultFile);
+}
+
 // Inspect one running agent's result artifact. Returns { status, from } when the worker
 // has reported a terminal state, or null when it is still working (no/!ready result).
 function classifyByResult(agent, orchDir) {
@@ -45,8 +50,9 @@ function classifyByResult(agent, orchDir) {
     // codex -o output is agent-<id>-result.json (sibling of the prompt). Prefer the
     // path the launcher derives; fall back to agent.resultFile if it points there.
     const jsonByConvention = path.join(orchDir, `agent-${agent.id}-result.json`);
+    const resultFile = resolveResultPath(orchDir, agent.resultFile);
     const file = fs.existsSync(jsonByConvention) ? jsonByConvention
-      : (agent.resultFile && agent.resultFile.endsWith('.json') ? agent.resultFile : jsonByConvention);
+      : (resultFile && resultFile.endsWith('.json') ? resultFile : jsonByConvention);
     if (!fs.existsSync(file)) return null;
     let parsed;
     try { parsed = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } // mid-write → wait
@@ -56,7 +62,7 @@ function classifyByResult(agent, orchDir) {
     return null; // unknown status → don't guess; let it keep running / be inspected
   }
   // claude / opencode: the worker writes its result file as its final act.
-  const md = agent.resultFile || path.join(orchDir, `agent-${agent.id}-result.md`);
+  const md = resolveResultPath(orchDir, agent.resultFile) || path.join(orchDir, `agent-${agent.id}-result.md`);
   if (fs.existsSync(md)) {
     try { if (fs.readFileSync(md, 'utf8').trim().length > 0) return { status: 'completed', from: md }; }
     catch { /* unreadable → wait */ }

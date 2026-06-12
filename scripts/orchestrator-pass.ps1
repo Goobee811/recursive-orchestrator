@@ -59,6 +59,9 @@ function Invoke-Step {
 
 Write-Host ("=== orchestrator pass @ {0} ===" -f (Get-Date -Format "HH:mm:ss")) -ForegroundColor Green
 Write-Host ("state={0} wmux={1} chain={2} mark={3} dryRun={4}`n" -f $State, [bool]$WmuxCli, [bool]$Chain, [bool]$Mark, [bool]$DryRun)
+if ([string]::IsNullOrWhiteSpace($RootPane)) {
+  Write-Host "WARNING: RootPane is empty; split layout cannot anchor nested/chain panes unless an agent pane is available." -ForegroundColor Yellow
+}
 
 # 1. reconcile (pane-exit completion — keys on `wmux agent list` reading 'exited')
 if ($WmuxCli) {

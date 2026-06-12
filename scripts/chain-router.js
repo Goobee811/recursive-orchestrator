@@ -222,21 +222,28 @@ function paneOf(stateFile, agentId) {
 }
 
 function allocateContinuationPane(opts, fromPane) {
+  if (opts.layout === 'grid') {
+    try {
+      const paneIds = allocateGrid(opts.wmuxCli, 1);
+      return { paneId: paneIds[0] };
+    } catch (e) {
+      process.stderr.write(`chain-router: layout grid failed (${e.message})\n`);
+      return {};
+    }
+  }
   if (opts.layout === 'split') {
     // harvest-results can kill the completed from-link pane before chain-router runs,
     // so prefer the exact chain pane but fall back to the orchestrator/root pane.
-    for (const sourcePane of [fromPane, opts.rootPane].filter(Boolean)) {
+    const sourcePanes = [fromPane, opts.rootPane].filter(Boolean);
+    if (sourcePanes.length === 0) {
+      return { error: 'no source pane for split layout; pass --root-pane or use --layout grid' };
+    }
+    for (const sourcePane of sourcePanes) {
       try { return { ...allocateSplit(opts.wmuxCli, sourcePane, 'vertical'), split: 'vertical', sourcePane }; }
       catch (e) { process.stderr.write(`chain-router: split from ${sourcePane} failed (${e.message})\n`); }
     }
   }
-  try {
-    const paneIds = allocateGrid(opts.wmuxCli, 1);
-    return { paneId: paneIds[0] };
-  } catch (e) {
-    process.stderr.write(`chain-router: layout grid failed (${e.message})\n`);
-    return {};
-  }
+  return {};
 }
 
 function routeOne(requestFile, opts) {
@@ -282,7 +289,7 @@ function routeOne(requestFile, opts) {
     const paneId = allocation.paneId;
     if (!paneId) {
       withState(opts.stateFile, (state) => { const f = findAgent(state, link.id); if (f) { f.agent.status = 'failed'; f.agent.exitCode = -1; } });
-      spawnInfo.error = 'no pane allocated';
+      spawnInfo.error = allocation.error || 'no pane allocated';
     } else {
       try {
         const claudeSessionId = link.engine === 'claude' ? crypto.randomUUID() : '';

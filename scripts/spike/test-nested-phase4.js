@@ -17,6 +17,7 @@ const SCRIPTS = path.resolve(__dirname, '..');
 const GUARD = path.join(SCRIPTS, 'nested-guard.js');
 const REQUEST = path.join(SCRIPTS, 'nested-request.js');
 const PROCESS = path.join(SCRIPTS, 'process-nested-requests.js');
+const FAKE_WMUX = path.join(__dirname, 'fake-wmux-cli.js');
 const { evaluateGuard } = require(path.join(SCRIPTS, 'nested-guard'));
 const { loadState } = require(path.join(SCRIPTS, 'nested-state'));
 
@@ -171,6 +172,35 @@ console.log('\n[5] processor authoritative deny');
   check('over-depth request denied by processor', out.denied.length === 1 && /depth/.test(out.denied[0].reason), JSON.stringify(out.denied));
   const st = loadState(stateFile);
   check('no children registered on deny', st.waves.length === 1, `waves=${st.waves.length}`);
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+// ── 5b. split layout without a source must not silently fall back to grid ───
+console.log('\n[5b] split layout requires source pane');
+{
+  const dir = mkOrch('split-no-source', baseState([agent('w1', 'running', { depth: 1 })]));
+  const stateFile = path.join(dir, 'state.json');
+  const logFile = path.join(dir, 'wmux.log');
+  fs.writeFileSync(path.join(dir, 'nested-request-w1.json'), JSON.stringify({
+    parentAgentId: 'w1', status: 'pending', cwd: '/tmp/work',
+    subTasks: [
+      { label: 'child one', subtask: 'do x', files: [], excludeFiles: [], engine: 'claude' },
+      { label: 'child two', subtask: 'do y', files: [], excludeFiles: [], engine: 'codex' },
+    ],
+  }));
+
+  const out = JSON.parse(execFileSync('node', [PROCESS, '--state', stateFile, '--wmux-cli', FAKE_WMUX, '--layout', 'split'], {
+    encoding: 'utf8',
+    env: { ...process.env, FAKE_WMUX_LOG: logFile },
+  }));
+  const children = out.processed[0] && out.processed[0].children ? out.processed[0].children : [];
+  const error = 'no source pane for split layout; pass --root-pane or use --layout grid';
+  check('split without source marks children failed', children.length === 2 && children.every((c) => c.error === error), JSON.stringify(children));
+  const kids = loadState(stateFile).waves[1].agents;
+  check('split without source updates state failed', kids.every((k) => k.status === 'failed' && k.exitCode === -1), JSON.stringify(kids.map((k) => [k.id, k.status, k.exitCode])));
+  const log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+  check('split without source does not call allocateGrid', !/layout-grid/.test(log), log.trim());
+
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

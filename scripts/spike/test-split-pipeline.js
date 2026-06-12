@@ -95,16 +95,20 @@ console.log('\n[2] chain next-link split from from-link pane');
   fs.rmSync(dir, { recursive: true, force: true });
 }
 
-console.log('\n[3] missing source falls back to grid');
+console.log('\n[3] missing source fails split children (no silent grid)');
 {
-  const dir = mkOrch('grid-fallback', baseState([agent('parent', 'running', { depth: 1 })]));
+  const dir = mkOrch('no-split-source', baseState([agent('parent', 'running', { depth: 1 })]));
   const log = path.join(dir, 'wmux.log');
   const stateFile = path.join(dir, 'state.json');
   writeNestedRequest(dir, 'parent', 2);
   const out = runNode(PROCESS, ['--state', stateFile, '--wmux-cli', FAKE], log);
   const entries = readLog(log);
-  check('grid fallback spawned children', out.processed[0].children.filter((c) => !c.error).length === 2, JSON.stringify(out));
-  check('grid fallback used layout grid, no split', entries.some((e) => e.command === 'layout-grid') && !entries.some((e) => e.command === 'split'), JSON.stringify(entries));
+  const children = out.processed[0].children;
+  const wantErr = 'no source pane for split layout; pass --root-pane or use --layout grid';
+  check('children fail without split source', children.length === 2 && children.every((c) => c.error === wantErr), JSON.stringify(children));
+  check('no grid and no split attempted', !entries.some((e) => e.command === 'layout-grid') && !entries.some((e) => e.command === 'split'), JSON.stringify(entries));
+  const st = loadState(stateFile);
+  check('state marks both children failed', st.waves[1].agents.map((k) => k.status).join(',') === 'failed,failed', JSON.stringify(st.waves[1].agents.map((k) => k.status)));
   fs.rmSync(dir, { recursive: true, force: true });
 }
 

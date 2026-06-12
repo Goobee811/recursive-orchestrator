@@ -12,6 +12,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($RootPane)) {
+  Write-Host "-RootPane is required (WMUX_PANE_ID co the rong sau resume; lay paneId tu: node `$env:WMUX_CLI tree)" -ForegroundColor Red
+  exit 1
+}
+
 $ExpectedAppAsarHash = "CED7F271E601015CEAF42FFE2EE005D698991B7A32EB31C73D1DE674BBD828B6"
 $AppAsar = "C:\Users\Bee\wmux\resources\app.asar"
 
