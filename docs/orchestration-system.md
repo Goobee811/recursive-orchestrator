@@ -1,6 +1,6 @@
 ---
 title: "Recursive Pane Orchestration System"
-date: 2026-06-10
+date: 2026-06-12
 type: doc
 tags: [orchestration, wmux, architecture]
 status: active
@@ -22,8 +22,74 @@ Các thành phần chính:
 - **Orchestrator depth 0:** actor trung tâm, đọc `state.json`, xử lý intent file, spawn worker vào pane wmux.
 - **Worker:** agent chạy trong pane, làm một phần việc, ghi result file, có thể xin fan-out hoặc chain continuation.
 - **State registry:** `state.json` lưu waves, agents, paneId, surfaceId, status, depth, parentAgentId, chainId.
-- **Pane allocator:** `pane-spawn.js` dùng wmux CLI để tạo pane bằng split hoặc grid, rồi gọi `wmux agent spawn --pane --cmd`.
+- **Pane allocator:** `pane-spawn.js` dùng wmux CLI để tạo pane bằng directional split hoặc grid tường minh, rồi gọi `wmux agent spawn --pane --cmd`.
 - **Launcher:** `launch-agent-ext.js` chọn engine `claude`, `opencode`, hoặc `codex`.
+
+## Multi-repo mode
+
+Hệ orchestration nằm trong repo này nhưng được phép điều phối work repo khác. Doctrine vận hành:
+
+- **CWD phiên orchestrator = work repo.** Ví dụ làm việc trên `C:\Users\Bee\govoff` thì phiên orchestrator `cd` vào govoff, không chạy trong repo `recursive-orchestrator`.
+- **Script orchestration gọi bằng đường dẫn tuyệt đối:** `C:\Users\Bee\recursive-orchestrator\scripts\...`.
+- **State/prompt/result/forensics nằm trong work repo:** `<work-repo>\.orch-run\<wave>\`. Không để artefact wave rơi vào repo orchestration khi đang làm repo khác.
+- **`-RootPane` bắt buộc với `orchestrate-start.ps1`:** lấy pane live bằng `node $env:WMUX_CLI tree`. Không dựa vào `WMUX_PANE_ID` vì biến này có thể rỗng sau resume.
+
+Các lệnh bị cấm khi đang orchestrate:
+
+- Không `wmux agent spawn` thô; luôn đi qua `process-nested-requests.js`, `chain-router.js`, `spawn-by-split.js` hoặc launcher của hệ.
+- Không tự `layout grid` cho wave. Grid chỉ dùng khi truyền `--layout grid` tường minh; layout split mà không có source pane phải báo lỗi `no source pane for split layout; pass --root-pane or use --layout grid`.
+- Không chạy bare `claude` ngoài `launch-agent-ext.js`; launcher là điểm enforce model policy.
+- Không chạy `codex exec` ad-hoc ngoài hệ khi orchestration đang quản lý wave.
+
+Chính sách model 3 tầng:
+
+| Tầng | Model/engine | Ghi chú |
+|---|---|---|
+| Orchestrator | Fable 5 hoặc Opus theo user chọn đầu phiên | Phiên chính không tự đổi model. Đầu phiên phải hỏi: "Chọn model nào: Fable hay Opus". |
+| Leader | `claude-opus-4-8[1m]`, effort `max` | Default của `launch-agent-ext.js`. |
+| Worker | GPT 5.5 Codex | Chạy qua nhánh `codex` của launcher. |
+
+`model_refusal_fallback` từ Fable 5 sang Opus 4.8 do refusal là **incident vận hành**: ghi nhận, báo user ngay, và không coi là thay đổi tier bình thường. Với worker Claude, nên audit first-assistant-model sau spawn bằng transcript JSONL theo `claudeSessionId` trong `state.json`.
+
+Ví dụ tối thiểu từ repo ngoài `C:\Users\Bee\govoff`:
+
+```powershell
+cd C:\Users\Bee\govoff
+node $env:WMUX_CLI tree
+
+New-Item -ItemType Directory -Force .orch-run\govwave | Out-Null
+$enc = New-Object System.Text.UTF8Encoding($false)
+[IO.File]::WriteAllText("C:\Users\Bee\govoff\.orch-run\govwave\state.json", '{"version":1,"waves":[]}', $enc)
+[IO.File]::WriteAllText("C:\Users\Bee\govoff\.orch-run\govwave\tasks.json", @'
+[
+  {
+    "label": "docs-check",
+    "subtask": "Đọc README và báo cáo ngắn tình trạng repo.",
+    "engine": "codex"
+  }
+]
+'@, $enc)
+
+node C:\Users\Bee\recursive-orchestrator\scripts\nested-request.js `
+  --state C:\Users\Bee\govoff\.orch-run\govwave\state.json `
+  --parent orch-root `
+  --tasks C:\Users\Bee\govoff\.orch-run\govwave\tasks.json `
+  --cwd C:\Users\Bee\govoff
+
+node C:\Users\Bee\recursive-orchestrator\scripts\process-nested-requests.js `
+  --state C:\Users\Bee\govoff\.orch-run\govwave\state.json `
+  --wmux-cli $env:WMUX_CLI `
+  --root-pane <paneId> `
+  --cwd C:\Users\Bee\govoff
+
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File C:\Users\Bee\recursive-orchestrator\scripts\orchestrate-start.ps1 `
+  -State C:\Users\Bee\govoff\.orch-run\govwave\state.json `
+  -WmuxCli $env:WMUX_CLI `
+  -RootPane <paneId> `
+  -Chain `
+  -Mark
+```
 
 ## Các delta đã build
 
@@ -180,6 +246,27 @@ Leader đọc marker reverse-relay
 
 ## Cách dùng script
 
+### `scripts/orchestrate-start.ps1`
+
+Driver loop nhiều pass cho một wave orchestration. Dùng PowerShell 5.1 và truyền path tuyệt đối khi chạy từ repo ngoài.
+
+Ví dụ:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Bee\recursive-orchestrator\scripts\orchestrate-start.ps1 `
+  -State C:\Users\Bee\govoff\.orch-run\govwave\state.json `
+  -WmuxCli $env:WMUX_CLI `
+  -RootPane <paneId> `
+  -Chain `
+  -Mark
+```
+
+Ghi chú:
+
+- `-RootPane` là bắt buộc; thiếu hoặc rỗng phải fail-fast exit `1`.
+- `-State` quyết định thư mục wave; mọi result tương đối phải resolve theo thư mục chứa state, không theo CWD của script.
+- `-HarvestKill` là opt-in legacy, không dùng mặc định.
+
 ### `scripts/orchestrator-pass.ps1`
 
 Driver một pass của orchestrator loop.
@@ -209,7 +296,7 @@ Ghi chú:
 - `-Chain` mới bật bước chain-router.
 - `-Mark` cho phép crash-recovery mark failed, nhưng chỉ khi có wmux live list.
 - `-HarvestKill` (opt-in legacy, KHÔNG nằm trong ví dụ mặc định): reap pane đã có result. Mặc định KHÔNG truyền — pane sống đến khi user tự đóng bằng `close-pane-with-log.js` (xem § Theo dõi và đóng pane thủ công).
-- `-RootPane` nên truyền tường minh vì `WMUX_PANE_ID` có thể rỗng sau resume.
+- `-RootPane` luôn truyền tường minh khi pass cần spawn nested/chain. Pass harvest-only có thể không cần, nhưng sẽ cảnh báo nếu thiếu.
 
 ### `scripts/spawn-by-split.js`
 
@@ -250,6 +337,15 @@ node scripts/nested-request.js `
 `tasks.json` là mảng object có `label`, `subtask`, tùy chọn `files`, `excludeFiles`, `engine`.
 
 Nếu guard deny, exit code `3`, worker phải tự làm tuần tự.
+
+### `scripts/process-nested-requests.js`
+
+Orchestrator xử lý request fan-out trong thư mục wave của `state.json`. Layout mặc định là split theo pane nguồn:
+
+- Child đầu split dọc từ parent/root pane.
+- Child tiếp theo split ngang từ pane child trước.
+- Nếu `--layout split` mà không resolve được parent pane hoặc `--root-pane`, request phải bị lỗi rõ: `no source pane for split layout; pass --root-pane or use --layout grid`.
+- Grid chỉ hợp lệ khi truyền `--layout grid` tường minh.
 
 ### `scripts/chain-request.js`
 
@@ -470,6 +566,8 @@ node $env:WMUX_CLI agent kill <wmuxAgentId>
 - **`WMUX_PANE_ID` có thể rỗng sau resume:** luôn truyền `--source-pane` hoặc `-RootPane` tường minh.
 - **PowerShell 5.1 và JSON cho Node:** ghi UTF-8 không BOM; các script Node đã strip BOM cho `state.json` nhưng file request nên tránh BOM.
 - **Worker intent file là untrusted:** orchestrator luôn re-validate parent id, engine, tasks, depth, concurrency.
+- **Cấm bare agent trong wave:** không dùng bare `claude`, `codex exec` ad-hoc, `wmux agent spawn` thô hoặc `layout grid` tay khi hệ đang điều phối.
+- **`model_refusal_fallback` là incident:** nếu phiên orchestrator Fable 5 fallback sang Opus 4.8 do refusal, báo user và ghi nhận trong báo cáo vận hành.
 - **Pane patch ngoài repo:** update wmux có thể làm mất `split --pane`, cần hash check trước phiên.
 - **Crash recovery không kill worker sống:** `crash-recovery.js detect --mark` chỉ mutate khi có live cross-check từ wmux.
 
