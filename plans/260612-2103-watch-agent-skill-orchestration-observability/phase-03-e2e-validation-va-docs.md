@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "E2E validation va docs"
-status: pending
+status: done-pending-2session-gate
 priority: P2
 effort: "30-45m"
 dependencies: [1, 2]

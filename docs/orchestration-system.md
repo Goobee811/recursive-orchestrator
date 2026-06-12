@@ -514,6 +514,23 @@ node scripts/watch-agent.js <agentId> --state <path>    # chỉ định run khi 
 - agentId trùng nhiều run: watch tự chọn state mtime mới nhất kèm cảnh báo; truyền `--state` để chỉ định.
 - Mọi output qua bộ lọc control-char (strip C0/C1/CSI/OSC) — output worker là untrusted.
 
+### `scripts/orch-status.js` — tổng quan wave + tail bounded (READ-ONLY)
+
+Một lệnh nhìn nhanh MỌI wave/agent của một root (repo bất kỳ) — bảng phân công, `tier`, freshness, intent đang chờ; kèm tail bounded events cuối của 1 worker. Không ghi/sửa gì.
+
+```powershell
+node scripts/orch-status.js                       # tổng quan cwd (.orch-run hiện tại)
+node scripts/orch-status.js <wave|repo|path>      # 1 wave / repo / state.json (resolve xuyên repo qua tên wave)
+node scripts/orch-status.js --discover            # quét mọi repo cấp 1 dưới $HOME có .orch-run (bỏ OneDrive)
+node scripts/orch-status.js <target> --tail <id>  # events cuối 1 agent (codex out.jsonl | claude transcript) — byte-slice, KHÔNG đọc cả file
+node scripts/orch-status.js <target> --json       # JSON machine-readable cho skill parse
+```
+
+- **Phân vai với `watch-agent.js`:** orch-status = tổng quan wave/phân công + tail BOUNDED một-lần (cả codex `out.jsonl` lẫn claude transcript byte-slice); `watch-agent.js` = follow LIVE 1 agent (replay-rồi-theo-dõi, user tự chạy ở terminal). orch-status KHÔNG dùng mode đọc-nguyên-file của watch-agent.
+- **State.json untrusted:** mọi `agent.id`/`resultFile` được validate + scope-check trong orchDir trước khi mở file forensics; field thiếu render `-`; state hỏng → 1 dòng `⚠ state unreadable`, không crash cả lệnh.
+- **`tier`:** record sinh qua `process-nested-requests.js`/`chain-router.js` mang field `tier` (`leader`/`worker`); wave cũ và record **hand-seed tay** (orchestrator ghi thẳng state) không có field → orch-status in `~leader`/`~worker` (suy diễn engine/chain). Khi hand-seed agent record bằng tay, thêm `tier: 'leader'|'worker'` (claude=leader, codex/opencode=worker) để bảng phân công chính xác.
+- Skill project-local **`/watch-agent [target]`** (`.claude/skills/watch-agent/SKILL.md`) điều phối 2 công cụ này thành báo cáo phân công/tư duy/hành động — READ-ONLY, có DATA-ONLY GUARD chống prompt injection.
+
 ### `scripts/close-pane-with-log.js` — đóng pane kèm lưu log
 
 Đóng 1 pane worker: render forensics -> lưu snapshot -> kill shell thu hồi RAM (~115MB/shell) -> close pane. **Dry-run mặc định**, chỉ phá huỷ khi `--confirm`:
@@ -591,4 +608,6 @@ node $env:WMUX_CLI agent kill <wmuxAgentId>
 - `scripts/reap-orphan-shells.ps1`: reap orphan surface shell toàn hệ (dry-run mặc định, 4 lớp khoá, fail-safe; `-OrchestratorPane` bắt buộc, JSON `shells[]` + TOCTOU re-check).
 - `scripts/orch-forensics-map.js`: resolver agentId/paneId -> forensics paths (scan `.orch-run/*/state.json`, disambiguation đa-run, `sanitizeControl`).
 - `scripts/watch-agent.js`: theo dõi agent real-time qua forensics đĩa (codex out.jsonl + claude transcript).
+- `scripts/orch-status.js`: tổng quan wave/phân công READ-ONLY (resolve xuyên repo + `--discover` + tail bounded); cùng `scripts/orch-status-read.js` (lớp đọc state, validate/scope-check, suy diễn `tier`) và `scripts/orch-status-tail.js` (byte-slice tail codex/claude, fallback result).
 - `scripts/close-pane-with-log.js`: đóng pane thủ công — lưu snapshot log rồi kill shell (dry-run mặc định).
+- `.claude/skills/watch-agent/SKILL.md`: skill project-local `/watch-agent` — tường thuật orchestration sessions (read-only, DATA-ONLY GUARD, điều phối orch-status + watch-agent).

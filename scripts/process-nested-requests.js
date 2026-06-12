@@ -147,9 +147,10 @@ function processOne(requestFile, opts) {
     const kids = subTasks.map((t, i) => {
       const id = makeChildId(state, parentId, i + 1, allocatedIds);
       allocatedIds.add(id);
+      const engine = normalizeEngine(t.engine);
       return {
         id, label: t.label, subtask: t.subtask, files: t.files || [], excludeFiles: t.excludeFiles || [],
-        engine: normalizeEngine(t.engine), parentAgentId: parentId, depth: verdict.childDepth,
+        engine, tier: engine === 'claude' ? 'leader' : 'worker', parentAgentId: parentId, depth: verdict.childDepth,
         paneId: null, surfaceId: null, wmuxAgentId: null, status: 'pending', exitCode: null, toolUses: 0,
         resultFile: path.join(orchDir, `agent-${id}-result.md`), startedAt: null, finishedAt: null,
       };

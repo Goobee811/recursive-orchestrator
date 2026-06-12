@@ -14,5 +14,6 @@ tmp/
 .DS_Store
 Thumbs.db
 
-# Claude session artifacts (subagent memory, task locks)
-.claude/
+# Claude session artifacts (subagent memory, task locks) — but track project-local skills
+.claude/*
+!.claude/skills/

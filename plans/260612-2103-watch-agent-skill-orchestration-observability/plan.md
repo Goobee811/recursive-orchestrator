@@ -1,7 +1,7 @@
 ---
 title: "Skill /watch-agent - quan sat nhanh orchestration sessions"
 description: "Skill project-local /watch-agent [target]: từ repo này nhìn nhanh mọi orchestration session (repo bất kỳ) — ai phân công gì, leader/worker đang nghĩ/làm gì; kèm helper scripts/orch-status.js"
-status: pending
+status: in-progress
 priority: P2
 created: 2026-06-12
 ---
@@ -30,9 +30,23 @@ Mode: fast (task nhỏ, rõ, chỉ chạm repo này + `.claude/skills/` local). 
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | [Helper script orch-status](./phase-01-helper-script-orch-status.md) | Pending |
-| 2 | [Skill watch-agent SKILL.md](./phase-02-skill-watch-agent-skill-md.md) | Pending |
-| 3 | [E2E validation va docs](./phase-03-e2e-validation-va-docs.md) | Pending |
+| 1 | [Helper script orch-status](./phase-01-helper-script-orch-status.md) | Done |
+| 2 | [Skill watch-agent SKILL.md](./phase-02-skill-watch-agent-skill-md.md) | Done |
+| 3 | [E2E validation va docs](./phase-03-e2e-validation-va-docs.md) | Done (chờ gate 2-phiên) |
+
+## Cook Log — 2026-06-12
+
+Cook xong 3 phase (mode code; orchestrator Opus 4.8). **Plan giữ in-progress** theo DoD Validation S1 Q4 — chỉ chuyển `completed` khi phiên SAU gõ `/watch-agent` thật, catalog nạp skill thành công.
+
+| Hạng mục | Kết quả |
+|----------|---------|
+| Phase 1 | `scripts/orch-status.js` (143d) + `orch-status-read.js` (103d) + `orch-status-tail.js` (108d); write-path `tier` vào `process-nested-requests.js` + `chain-router.js` (thuần additive); `test-orch-status.js` 45 check |
+| Phase 2 | `.claude/skills/watch-agent/SKILL.md` (66d, DATA-ONLY GUARD + F10 exclusions, 0 lệnh mutate) — **lưu ý:** `.gitignore:18` ignore `.claude/` |
+| Phase 3 | 5 kịch bản E2E PASS trên data thật (discover, cross-repo gantt-sync, error, claude fallback F8, oversized 240KB F5); docs 594→613 (<800) |
+| Test | Full suite 10/10 PASS (0 regression); node --check sạch |
+| Review | code-reviewer DONE: 100% acceptance + 14/14 red-team finding verified; áp Nit-2 (validate sid trước findTranscript — nhất quán F14) + Nit-3 (test relay-skip); bỏ Nit-1 (YAGNI) |
+
+**Gate còn lại (Q4):** phiên MỚI gõ `/watch-agent` thật thành công → mới tick ô cuối phase-03 + chuyển plan `completed`.
 
 ## Dependencies
 

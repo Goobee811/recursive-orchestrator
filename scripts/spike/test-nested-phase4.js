@@ -117,6 +117,7 @@ console.log('\n[4] request → process (dry-run) registers tree');
   check('2 children registered', kids.length === 2 && kids[0].id === 'w1-c1' && kids[1].id === 'w1-c2', JSON.stringify(kids.map((k) => k.id)));
   check('children carry parent + depth', kids.every((k) => k.parentAgentId === 'w1' && k.depth === 2), JSON.stringify(kids.map((k) => [k.parentAgentId, k.depth])));
   check('codex engine preserved', kids[1].engine === 'codex' && kids[1].files[0] === 'src/y.js');
+  check('children carry tier (claude→leader, codex→worker)', kids[0].tier === 'leader' && kids[1].tier === 'worker', JSON.stringify(kids.map((k) => [k.engine, k.tier])));
   check('prompt files written', fs.existsSync(path.join(dir, 'agent-w1-c1-prompt.md')) && fs.existsSync(path.join(dir, 'agent-w1-c2-prompt.md')));
 
   const resp = JSON.parse(fs.readFileSync(path.join(dir, 'nested-response-w1.json'), 'utf8'));

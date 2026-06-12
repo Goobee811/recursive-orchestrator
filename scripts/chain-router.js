@@ -180,9 +180,13 @@ When the WHOLE thread is finished instead, signal completion to reverse-relay to
 // Returns the new link agent (caller writes its prompt + spawns it).
 function applySpawnNext(state, plan, spec, orchDir) {
   const id = makeLinkId(state, plan.chainId, plan.nextSeq);
+  // A continuation link keeps the from-agent's role (worker continuation under a leader);
+  // legacy/hand-seeded from-agents without a tier default to worker.
+  const from = findAgent(state, plan.fromAgentId);
   const link = {
     id, label: spec.label, subtask: spec.remaining, remaining: spec.remaining,
     files: spec.files, excludeFiles: spec.excludeFiles, engine: spec.engine,
+    tier: (from && from.agent.tier) || 'worker',
     chainId: plan.chainId, linkSeq: plan.nextSeq, nextLink: null, leaderAgentId: plan.leaderAgentId,
     parentAgentId: plan.fromAgentId, depth: plan.depth, prevResultFile: spec.prevResultFile,
     prevResultFileExists: spec.prevResultFileExists, prevOutJsonl: spec.prevOutJsonl || '',
@@ -190,7 +194,6 @@ function applySpawnNext(state, plan, spec, orchDir) {
     resultFile: path.join(orchDir, `agent-${id}-result.md`), startedAt: null, finishedAt: null,
   };
   addNestedWave(state, [link]);
-  const from = findAgent(state, plan.fromAgentId);
   if (from) from.agent.nextLink = plan.nextSeq;
   return link;
 }

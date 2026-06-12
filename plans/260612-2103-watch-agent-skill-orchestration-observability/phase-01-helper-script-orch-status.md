@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Helper script orch-status"
-status: pending
+status: done
 priority: P2
 effort: "3-4h"
 dependencies: []

@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Skill watch-agent SKILL.md"
-status: pending
+status: done
 priority: P2
 effort: "1h"
 dependencies: [1]

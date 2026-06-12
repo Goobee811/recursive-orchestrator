@@ -81,7 +81,7 @@ console.log('\n[2] planRoute decisions');
 // ── 3. applySpawnNext mutates state correctly ───────────────────────────────
 console.log('\n[3] applySpawnNext');
 {
-  const s = baseState([agent('w1', 'running', { depth: 2, chainId: 'chain-w1', linkSeq: 1, leaderAgentId: 'L', resultFile: '/tmp/r1.md' })]);
+  const s = baseState([agent('w1', 'running', { depth: 2, tier: 'leader', chainId: 'chain-w1', linkSeq: 1, leaderAgentId: 'L', resultFile: '/tmp/r1.md' })]);
   const plan = planRoute(s, { status: 'pending', fromAgentId: 'w1', done: false });
   const spec = sanitizeNext({ label: 'continue', remaining: 'finish the rest', prevResultFile: 'agent-w1-result.md' }, '/tmp', null);
   const link = applySpawnNext(s, plan, spec, '/tmp');
@@ -91,6 +91,7 @@ console.log('\n[3] applySpawnNext');
   check('link2 carries leader + prevResult', link.leaderAgentId === 'L' && link.prevResultFile === 'agent-w1-result.md');
   check('from.nextLink wired to 2', s.waves[0].agents[0].nextLink === 2);
   check('link2 starts pending w/ result file', link.status === 'pending' && /agent-chain-w1-L2-result\.md$/.test(link.resultFile));
+  check('link2 inherits tier from from-agent', link.tier === 'leader', `tier=${link.tier}`);
 }
 
 // ── 4. chain-request.js writer (worker side) ────────────────────────────────
