@@ -1,11 +1,13 @@
 ---
 phase: 4
 title: "Verification: E2E + Token Re-Measurement"
-status: pending
+status: completed
 priority: P1
 effort: "2h"
 dependencies: [3]
 ---
+
+> **Hoàn thành 2026-06-13.** Báo cáo: `reports/verify-260613-token-before-after.md`. node --test 298/0. E2E 9/9 data thật. Token (chars÷4): activation 1499≤1500, 3a 3271≤4500 (−46%), 3b 4003≤7000 (−57%), 3c 2655–3291≤3700, 3d ~1.4–2k. Lớp 1 description 272 tok (tăng +16 — user decision không gate). Trigger coverage 27/27 positive + 5/5 negative reject. Grep sweep: skill dir 0, rules 0, memory 1 (đã cập nhật), repo 5 (snapshot lịch sử). docs/orchestration-system.md + memory cập nhật v3.1.0.
 
 # Phase 4: Verification — E2E + Token Re-Measurement
 

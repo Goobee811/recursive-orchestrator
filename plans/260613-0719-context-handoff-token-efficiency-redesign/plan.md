@@ -1,11 +1,14 @@
 ---
 title: "Context-Handoff v3.1 - Token-Efficiency Redesign"
 description: "Tái thiết kế skill context-handoff (khớp nối hệ orchestration) giảm 30-40% token/workflow, giữ nguyên features, fix bug circular require"
-status: pending
+status: completed
 priority: P1
 created: 2026-06-13
+completed: 2026-06-13
 tags: [context-handoff, token-efficiency, skill-optimization, orchestration]
 ---
+
+> **COOK DONE 2026-06-13.** 4/4 phases completed. node --test 298/0, E2E 9/9. Token giảm theo lớp: activation −30%, Creation git-only −46%, Creation+orch −57%, Resume −36~48%. Trigger coverage 100% (27 positive + 5 negative). 2 bug v3.0.0 đã fix (circular require `--trail`, metadata regex). THÊM vòng tự-sửa-sai (hypothesis→prediction→Verify→contradiction→dead-end→gate). Verify: `reports/verify-260613-token-before-after.md`.
 
 # Context-Handoff v3.1 - Token-Efficiency Redesign
 
@@ -49,10 +52,10 @@ Skill `~/.claude/skills/context-handoff` (v3.0.0, global) là **khớp nối** g
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | [Scripts: Embedded Template + Resume Control-Plane + Bugfix](./phase-01-scripts-embedded-template-self-contained-resume-bugfix.md) | Pending |
-| 2 | [Instructions: SKILL.md + Description Tune-up + References Consolidation](./phase-02-instructions-skill-md-description-references-consolidation.md) | Pending |
-| 3 | [Process Guardrails: Hypothesis → Prediction → Verify Loop](./phase-03-process-guardrails-hypothesis-prediction-verify-loop.md) | Pending |
-| 4 | [Verification: E2E + Token Re-Measurement](./phase-04-verification-e2e-token-re-measurement.md) | Pending |
+| 1 | [Scripts: Embedded Template + Resume Control-Plane + Bugfix](./phase-01-scripts-embedded-template-self-contained-resume-bugfix.md) | ✅ Completed |
+| 2 | [Instructions: SKILL.md + Description Tune-up + References Consolidation](./phase-02-instructions-skill-md-description-references-consolidation.md) | ✅ Completed |
+| 3 | [Process Guardrails: Hypothesis → Prediction → Verify Loop](./phase-03-process-guardrails-hypothesis-prediction-verify-loop.md) | ✅ Completed |
+| 4 | [Verification: E2E + Token Re-Measurement](./phase-04-verification-e2e-token-re-measurement.md) | ✅ Completed |
 
 ## User Decisions (validate interview 2026-06-13 — KHÔNG tự đảo)
 

@@ -1,11 +1,13 @@
 ---
 phase: 2
 title: "Instructions: SKILL.md + Description Tune-up + References Consolidation"
-status: pending
+status: completed
 priority: P1
 effort: "3h"
 dependencies: [1]
 ---
+
+> **Hoàn thành 2026-06-13.** SKILL.md 5524 chars (≤6000, chừa 476 cho khối Guardrails Phase 3) — placeholder `<!-- GUARDRAILS-PHASE-3 -->` đã đặt. Description giữ 100% 24 phrase v3.0.0 + 3 phrase guardrails (1089 chars, KHÔNG cắt theo user decision). References 8→4 .md (+1 .json): tạo handoff-authoring-guide.md (90) + handoff-filled-examples.md (144), orchestration-handoff-guide.md nhận mapping + sửa pointer F9, xóa 6 file cũ. evals.json: version 3.1.0, +trigger_coverage (27 positive/5 negative), +case resume-brief, sửa case skeleton cũ. package.json 3.1.0 + thêm handoff-template.test.js. Grep sweep skill dir: 0 dangling.
 
 # Phase 2: Instructions — SKILL.md + Description Tune-up + References Consolidation
 
@@ -75,13 +77,13 @@ Trong `~/.claude/skills/context-handoff/`:
 
 ## Todo List
 
-- [ ] handoff-authoring-guide.md + handoff-filled-examples.md
-- [ ] orchestration-handoff-guide.md nhận mapping
-- [ ] Xóa 6 references cũ
-- [ ] SKILL.md v3.1.0 ≤6.000 chars; description tune-up coverage 100%
-- [ ] evals.json: cases mới + trigger-recall section
-- [ ] package.json 3.1.0
-- [ ] Grep sweep dangling pointers trong skill dir
+- [x] handoff-authoring-guide.md (90) + handoff-filled-examples.md (144)
+- [x] orchestration-handoff-guide.md nhận mapping + sửa pointer F9
+- [x] Xóa 6 references cũ
+- [x] SKILL.md v3.1.0 5524 chars (≤6000, chừa 476 Guardrails); description coverage 100% v3.0.0 + 3 guardrails
+- [x] evals.json: trigger_coverage 27/5 + case resume-brief + sửa case skeleton cũ
+- [x] package.json 3.1.0 + handoff-template.test.js
+- [x] Grep sweep dangling pointers skill dir — 0 hit
 
 ## Success Criteria
 

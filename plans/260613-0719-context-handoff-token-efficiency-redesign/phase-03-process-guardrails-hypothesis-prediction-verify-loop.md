@@ -1,11 +1,13 @@
 ---
 phase: 3
 title: "Process Guardrails: Hypothesis → Prediction → Verify Loop"
-status: pending
+status: completed
 priority: P1
 effort: "3h"
 dependencies: [1, 2]
 ---
+
+> **Hoàn thành 2026-06-13.** parseHandoff (parse-handoff.js) thêm field `predictions` (check TRƯỚC `Quyết Định` để không nuốt bảng; backward-compat: handoff cũ → `[]`). validate-handoff +2 warn: (a) Next Steps có rows nhưng thiếu section Giả Thuyết (hasPredictions chỉ xét H2, KHÔNG xét title — fix edge title chứa "Predictions"), (b) thiếu `**Verify:**` (nhận cả 2 bold-colon form). SKILL.md khối `## Guardrails (tự-sửa-sai)` chèn vào placeholder + 5 high-risk gates — total 5996 chars ≤6000. decision-trail-guide +mapping prediction-miss→dead-end. evals +5 cases (4 guardrails + 1 security Verify-command-untrusted) = 43 tests. E2E tay xác nhận: predictions parse, prediction-miss → dead-end [D2] trace xuyên phiên. 298 tests pass.
 
 # Phase 3: Process Guardrails — Hypothesis → Prediction → Verify Loop
 
@@ -66,13 +68,13 @@ Trong `~/.claude/skills/context-handoff/`:
 
 ## Todo List
 
-- [ ] Template: section + Verify line + Reflect 1-dòng (round-trip mở rộng)
-- [ ] parseHandoff predictions + backward-compat test
-- [ ] validate-handoff 2 warn + tests
-- [ ] SKILL.md khối Guardrails + High-risk gates
-- [ ] decision-trail-guide mapping prediction-miss
-- [ ] evals.json 4-6 cases guardrails
-- [ ] Kịch bản e2e tay: prediction sai → mâu thuẫn → dead-end → gate
+- [x] Template: section Giả Thuyết + Verify line + Reflect 1-dòng (đặt sẵn Phase 1, round-trip test pass)
+- [x] parseHandoff predictions + backward-compat test (handoff cũ → [])
+- [x] validate-handoff 2 warn (predictions thiếu + Verify thiếu) + tests
+- [x] SKILL.md khối Guardrails + 5 High-risk gates (≤6000 chars)
+- [x] decision-trail-guide mapping prediction-miss → dead-end [D#]
+- [x] evals.json 5 cases guardrails+security
+- [x] Kịch bản e2e tay: prediction → prediction-miss → dead-end [D2] trace xuyên phiên
 
 ## Success Criteria
 

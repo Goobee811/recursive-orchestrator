@@ -614,10 +614,15 @@ node $env:WMUX_CLI agent kill <wmuxAgentId>
 
 ## Handoff giữa các phiên orchestrator
 
-Skill global `/context-handoff` (v3.0.0, `~/.claude/skills/context-handoff/`) là khớp nối giữa các phiên orchestrator. Khi kết thúc phiên, `gather-context.js` của skill tự phát hiện wave recent trong `<work-repo>/.orch-run/` và nhúng vào handoff doc:
+Skill global `/context-handoff` (v3.1.0, `~/.claude/skills/context-handoff/`) là khớp nối giữa các phiên orchestrator. Khi kết thúc phiên, `gather-context.js` của skill tự phát hiện wave recent trong `<work-repo>/.orch-run/` và nhúng vào handoff doc:
 
 - **Handoff ledger đa tầng:** bảng phân công (tier/parentAgentId), chuỗi handoff 180k (`chain-request-*.json` → văn bản `remaining` đã bàn giao giữa links), reverse-relay (`relay-*.json`), decisions/remaining/blockers harvest từ `agent-*-result.{json,md}`.
 - **Mermaid handoff graph** auto-generate (`render-handoff-graph.js`): solid = phân công, dashed = chain handoff kèm gist, thick = relay; node icon ✓/✗/▶/○, dedupe id trùng (`×N`).
 - **Decision trail node-ID** (`trace-decision-trail.js`): mỗi quyết định qua các phiên là node `[D#]` chronological, `--mermaid` render cây cho user.
+
+**v3.1.0 — token-efficiency + vòng tự-sửa-sai:**
+- **Template embed:** skeleton + guidance (`ORCH_GUIDANCE`) sống trong script (`handoff-template.js`, `format-orchestration-section.js`) — draft tự hướng dẫn (`<!-- Reflect: -->` inline), bỏ đọc file skeleton mặc định. References gộp 8→4 .md.
+- **Resume control/data-plane:** `resume-handoff.js --brief --validate --trail` trả JSON control-plane (file, ageDays, staleWarning, validation, trail `[D#]`, `hasWaveSection`); phiên resume LUÔN đọc đầy đủ handoff doc làm data plane duy nhất (brief không chứa prose/mermaid/orch-plan).
+- **Vòng tự-sửa-sai:** handoff ghi section "Giả Thuyết & Dự Đoán" + metadata `**Verify:**` (lệnh checkpoint read-only). Khi resume: chạy lại Verify, so prediction↔reality — lệch thì tin REALITY, ghi mâu thuẫn thành dead-end `[D#]` ở handoff kế; high-risk (stale >7d, wave `running`, prediction lệch đổi hướng, mâu thuẫn user-decision, validator sensitive) → AskUserQuestion trước khi tiếp.
 
 Skill đọc `.orch-run` READ-ONLY + DATA-ONLY GUARD (như `/watch-agent`), tự đọc state.json không phụ thuộc scripts repo này — hoạt động ở mọi work-repo. Handoff doc lưu tại `<work-repo>/plans/reports/` theo doctrine multi-repo. Chi tiết: `~/.claude/skills/context-handoff/references/orchestration-handoff-guide.md`.

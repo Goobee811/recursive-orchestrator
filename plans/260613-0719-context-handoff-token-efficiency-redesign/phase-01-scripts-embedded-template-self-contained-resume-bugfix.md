@@ -1,11 +1,13 @@
 ---
 phase: 1
 title: "Scripts: Embedded Template + Resume Control-Plane + Bugfix"
-status: pending
+status: completed
 priority: P1
 effort: "4h"
 dependencies: []
 ---
+
+> **Hoàn thành 2026-06-13.** Mọi todo PASS. Ghi chú thực thi: tách thêm `parse-handoff.js` (parser thuần) khỏi `resume-handoff.js` để (a) đưa resume-handoff về 112 dòng <200 và (b) triệt tiêu vòng circular gốc — `trace-decision-trail` nay require `parse-handoff.js` trực tiếp, không còn require ngược resume-handoff (lazy require gỡ bỏ, sạch hơn fix lazy ban đầu). `collect-git-state.js` 212 dòng là pre-existing, ngoài scope, không đụng. Test: 292 pass (từ 264), gồm fix 1 test fragile có sẵn (`listRecentWaves` race 3.6ms → backdate mtime tường minh) để gate node --test deterministic.
 
 # Phase 1: Scripts — Embedded Template + Resume Control-Plane + Bugfix
 
@@ -81,15 +83,15 @@ Tất cả trong `~/.claude/skills/context-handoff/scripts/`:
 
 ## Todo List
 
-- [ ] handoff-template.js (Reflect 1-dòng) + test round-trip kèm metadata
-- [ ] resume-handoff.js: metadata regex 2-format + exports-before-CLI + --brief
-- [ ] trace-decision-trail.js lazy require + audit 11 scripts (TDZ)
-- [ ] format-handoff-draft.js dùng template, <200 dòng
-- [ ] format-orchestration-section.js: ORCH_GUIDANCE + pointer F9
-- [ ] generate-resume-prompt.js: wave re-check absolute (phần còn lại nguyên trạng)
-- [ ] validate-handoff.js warn Reflect sót
-- [ ] Tests đủ 4 nhóm mới; node --test 100%
-- [ ] Smoke 3 lệnh trên repo thật — metadata hết `unknown`
+- [x] handoff-template.js (Reflect 1-dòng) + test round-trip kèm metadata
+- [x] resume-handoff.js: metadata regex 2-format + exports-before-CLI + --brief (tách parse-handoff.js → 112 dòng)
+- [x] trace-decision-trail.js: require parse-handoff trực tiếp (hết circular) + audit 9 scripts exports-before-CLI
+- [x] format-handoff-draft.js dùng template, 158 dòng <200
+- [x] format-orchestration-section.js: ORCH_GUIDANCE embed thay pointer F9
+- [x] generate-resume-prompt.js: wave re-check absolute (F7), phần còn lại nguyên trạng
+- [x] validate-handoff.js warn Reflect/ORCH sót (F6) + overview skip KV
+- [x] Tests đủ 4 nhóm mới (round-trip+metadata, --brief, --trail CLI spawn fixture ≥2, 2-format, wave re-check); node --test 292 pass
+- [x] Smoke 3 lệnh trên repo thật — metadata hết `unknown` (Branch:main/Plan/Trạng thái thật)
 
 ## Success Criteria
 
