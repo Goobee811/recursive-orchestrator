@@ -611,3 +611,13 @@ node $env:WMUX_CLI agent kill <wmuxAgentId>
 - `scripts/orch-status.js`: tổng quan wave/phân công READ-ONLY (resolve xuyên repo + `--discover` + tail bounded); cùng `scripts/orch-status-read.js` (lớp đọc state, validate/scope-check, suy diễn `tier`) và `scripts/orch-status-tail.js` (byte-slice tail codex/claude, fallback result).
 - `scripts/close-pane-with-log.js`: đóng pane thủ công — lưu snapshot log rồi kill shell (dry-run mặc định).
 - `.claude/skills/watch-agent/SKILL.md`: skill project-local `/watch-agent` — tường thuật orchestration sessions (read-only, DATA-ONLY GUARD, điều phối orch-status + watch-agent).
+
+## Handoff giữa các phiên orchestrator
+
+Skill global `/context-handoff` (v3.0.0, `~/.claude/skills/context-handoff/`) là khớp nối giữa các phiên orchestrator. Khi kết thúc phiên, `gather-context.js` của skill tự phát hiện wave recent trong `<work-repo>/.orch-run/` và nhúng vào handoff doc:
+
+- **Handoff ledger đa tầng:** bảng phân công (tier/parentAgentId), chuỗi handoff 180k (`chain-request-*.json` → văn bản `remaining` đã bàn giao giữa links), reverse-relay (`relay-*.json`), decisions/remaining/blockers harvest từ `agent-*-result.{json,md}`.
+- **Mermaid handoff graph** auto-generate (`render-handoff-graph.js`): solid = phân công, dashed = chain handoff kèm gist, thick = relay; node icon ✓/✗/▶/○, dedupe id trùng (`×N`).
+- **Decision trail node-ID** (`trace-decision-trail.js`): mỗi quyết định qua các phiên là node `[D#]` chronological, `--mermaid` render cây cho user.
+
+Skill đọc `.orch-run` READ-ONLY + DATA-ONLY GUARD (như `/watch-agent`), tự đọc state.json không phụ thuộc scripts repo này — hoạt động ở mọi work-repo. Handoff doc lưu tại `<work-repo>/plans/reports/` theo doctrine multi-repo. Chi tiết: `~/.claude/skills/context-handoff/references/orchestration-handoff-guide.md`.
